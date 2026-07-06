@@ -1,0 +1,45 @@
+# MetroPT-3 ingestion & profiling config
+paths:
+  raw_csv: data/raw/MetroPT3(AirCompressor).csv
+  processed_parquet: data/processed/sensor_readings.parquet
+  failure_windows: data/processed/failure_windows.csv
+  features_base: data/processed/features_base.parquet
+  cycles: data/processed/cycles.parquet
+  features_model: data/processed/features_model.parquet
+  model_outputs: data/processed/model_outputs.parquet
+  profile_md: docs/data_profile.md
+  figures_dir: docs/figures
+
+ingestion:
+  chunksize: 1_000_000        # rows per chunk when streaming the CSV
+  asset_id: APU_01            # single asset, but kept in schema for A2 compatibility
+
+features:
+  base_freq: 1min             # 10s raw -> 1-min aggregates (6 samples/min)
+  gap_threshold_seconds: 600  # a >10-min hole starts a new segment; rolling
+                              # and cycle features never bridge segments
+  min_cycle_seconds: 30       # discard load/idle runs shorter than this
+                              # (single-sample toggles / sensor chatter)
+
+model:
+  # Healthy reference periods for training. Chosen from the profile & cycle
+  # overview: February = long calm baseline; Apr 5-14 = clean post-March-regime
+  # window. Deliberately EXCLUDES the undocumented ~Mar 8-12 event and sits
+  # clear of all failure windows. Log this choice + tradeoffs in decision_log.md.
+  train_periods:
+    - ["2020-02-01", "2020-02-28"]
+    - ["2020-04-05", "2020-04-14"]
+  score_quantile: 0.995        # threshold = this quantile of TRAINING scores
+  persistence_window_min: 60   # look-back window (minutes)
+  persistence_hits_min: 30     # alert only if >=30 of last 60 min exceed threshold
+  eval:
+    early_warning_horizon_days: 7   # alerts within 7 days before a failure count as detection
+    exclusion_before_days: 7        # buffer around failures excluded from false-alarm counting
+    exclusion_after_days: 2
+
+profiling:
+  gap_threshold_seconds: 60   # a timestamp jump larger than this counts as a recording gap
+  # A quiet weekday morning in a known-healthy period, used for the "normal operation" plot.
+  # Adjust after your first profiling run if this lands inside a recording gap.
+  normal_snapshot_start: "2020-03-02 06:00:00"
+  normal_snapshot_hours: 3
