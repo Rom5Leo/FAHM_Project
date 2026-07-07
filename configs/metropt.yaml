@@ -37,6 +37,18 @@ model:
     exclusion_before_days: 7        # buffer around failures excluded from false-alarm counting
     exclusion_after_days: 2
 
+eda:
+  pad_days: 3            # context shown around each event zoom
+  prefail_hours: 48      # 'pre-failure' horizon for the distribution comparison
+  # Events of interest beyond the documented failures (D11):
+  extra_events:
+    - failure_id: M10_undocumented
+      fault_type: unknown
+      start: "2020-03-08 00:00:00"
+      end: "2020-03-12 00:00:00"
+  # Healthy reference for distribution plots: reuses model.train_periods
+  # unless overridden here (keep ONE source of truth for 'healthy').
+
 profiling:
   gap_threshold_seconds: 60   # a timestamp jump larger than this counts as a recording gap
   # A quiet weekday morning in a known-healthy period, used for the "normal operation" plot.
