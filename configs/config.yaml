@@ -1,0 +1,31 @@
+# config.yaml — the NUMBERS layer. If you change an experiment, you should
+# only need to touch this file. Loaded by preprocessing.load_config().
+#
+# YAML in 30 seconds:
+#   key: value                     -> cfg["key"]
+#   nested via indentation          -> cfg["paths"]["raw_csv"]
+#   lists with dashes               -> cfg["checks"]["analog_ranges"] is a list
+#   strings need no quotes unless they contain special chars like ( ) : #
+#   comments start with #
+
+paths:
+  raw_csv: "data/raw/MetroPT3(AirCompressor).csv"   # quoted: contains ( )
+  processed: data/processed/          # you decide the filename + format
+  failure_windows: data/processed/failure_windows.csv
+  figures: docs/figures/
+
+preprocessing:
+  # YOUR decisions — fill these as you make them, so the config documents them:
+  gap_threshold_seconds:            # what counts as a recording gap?
+  expected_interval_seconds:        # what should the modal sampling step be?
+
+checks:
+  # example of a list of mappings — plausible physical ranges per sensor,
+  # for run_checks(). Fill in from your own profiling:
+  analog_ranges:
+    - {sensor: TP3, min: , max: }
+    - {sensor: Oil_temperature, min: , max: }
+
+failure_windows:
+  # transcribe + VERIFY from the MetroPT paper before trusting:
+  - {failure_id: F1, fault_type: , start: , end: }
