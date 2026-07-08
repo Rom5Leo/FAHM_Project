@@ -1,9 +1,5 @@
 """Preprocessing for MetroPT-3 — SKELETON. Every function body is yours to write.
 
-This mirrors the stages of your football preprocessing notebook (see
-docs/workflow_mapping.md for the stage-by-stage mapping). The notebook should
-only CALL these functions and display their results.
-
 Design decisions you must make (write each into your decision log):
   * dtypes per column, and how to mark missing values in digital signals
   * how to parse/validate the timestamp
@@ -18,22 +14,34 @@ from pathlib import Path
 
 import pandas as pd
 
+import yaml
 
 def load_config(path: str | Path) -> dict:
-    """Read the YAML config into a dict.
+    """Load the YAML config and resolve every entry in cfg["paths"]
+    to an absolute path, anchored at the project root.
 
-    Hint: yaml.safe_load. Keep this the ONLY place that opens the config.
+    Root is derived from the config's own location: configs/ sits one
+    level below the repo root, so root = config_file.parent.parent.
+    This makes all paths work regardless of where Python is launched from.
     """
+    path = Path(path).resolve()
+    with open(path) as f:
+        cfg = yaml.safe_load(f)
+
+    root = path.parent.parent
+    cfg["paths"] = {k: str(root / v) for k, v in cfg["paths"].items()}
+    return cfg
+    
     raise NotImplementedError
 
 
 def load_raw(cfg: dict) -> pd.DataFrame:
-    """Stage 4: read the raw CSV into a typed DataFrame.
+    """naive load, no typing yet.
 
-    Your decisions: dtypes (analog vs digital), timestamp parsing, dropping
-    the unnamed index column, column order. Aim: `df.info()` after this
-    should show sensible dtypes and a fraction of naive-load memory.
+    Deliberately raw — dtypes, timestamp parsing, and column cleanup are
+    step 2 decisions, measured against this version's memory usage.
     """
+    return pd.read_csv(cfg["paths"]["raw_csv"])
     raise NotImplementedError
 
 

@@ -4,10 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 
-data/raw/
-data/processed/
-data/simulated/
-data/outputs/
+data/
 models/
 *.parquet
 *.csv
