@@ -34,14 +34,27 @@ def load_config(path: str | Path) -> dict:
     
     raise NotImplementedError
 
+ANALOG = ["TP2", "TP3", "H1", "DV_pressure", "Reservoirs",
+          "Oil_temperature", "Motor_current"]
+DIGITAL = ["COMP", "DV_eletric", "Towers", "MPG", "LPS",
+           "Pressure_switch", "Oil_level", "Caudal_impulses"]
+TIMESTAMP = "timestamp"
 
 def load_raw(cfg: dict) -> pd.DataFrame:
-    """naive load, no typing yet.
+    """Typed load of the raw CSV.
 
-    Deliberately raw — dtypes, timestamp parsing, and column cleanup are
-    step 2 decisions, measured against this version's memory usage.
+    D04: analog -> float64 (kept; precision over memory, memory not a
+    constraint), digital -> int8 (verified: no missing values in data).
+    D05: timestamp parsed with explicit format (fast path); Unnamed: 0
+    dropped AFTER noting it revealed 10x decimation of the 1Hz original.
     """
-    return pd.read_csv(cfg["paths"]["raw_csv"])
+    df = pd.read_csv(cfg["paths"]["raw_csv"])
+
+    df[TIMESTAMP] = pd.to_datetime(df[TIMESTAMP], format="%Y-%m-%d %H:%M:%S")
+    df[DIGITAL] = df[DIGITAL].astype("int8")   # 1.0/0.0 floats -> 1/0
+    df = df.drop(columns=["Unnamed: 0"])
+
+    return df[[TIMESTAMP] + ANALOG + DIGITAL]  # canonical column order
     raise NotImplementedError
 
 
