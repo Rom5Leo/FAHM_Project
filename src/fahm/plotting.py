@@ -123,13 +123,21 @@ def save_fig(fig, name: str, cfg: dict, dpi: int = 120) -> Path:
     raise NotImplementedError
 
 
-def plot_sensor_timeline(df: pd.DataFrame, sensor: str,
-                         start=None, end=None):
-    """Bonus (build when needed): one sensor over a time window. Returns fig.
+def plot_sensor_timeline(df: pd.DataFrame, sensor: str, start=None, end=None):
+    """One sensor over a time window. Returns the figure.
+    start/end: anything pd.Timestamp accepts; None = no bound."""
+    m = pd.Series(True, index=df.index)
+    if start is not None:
+        m &= df[TIMESTAMP] >= pd.Timestamp(start)
+    if end is not None:
+        m &= df[TIMESTAMP] <= pd.Timestamp(end)
+    win = df[m]
 
-    You'll want this the moment a histogram makes you ask "but WHEN does it
-    look like that?" — distributions hide time; this reveals it.
-    Hints: mask by TIMESTAMP between start/end; plot with a thin line
-    (lw=0.5) — 1.5M points at default width is an unreadable smear.
-    """
+    fig, ax = plt.subplots(figsize=(14, 4))
+    ax.plot(win[TIMESTAMP], win[sensor], lw=0.5)
+    ax.set_ylabel(sensor)
+    ax.set_title(f"{sensor}  {win[TIMESTAMP].min()} → {win[TIMESTAMP].max()}")
+    fig.tight_layout()
+    return fig
+
     raise NotImplementedError

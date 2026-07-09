@@ -50,7 +50,38 @@
   (paper spells it "Caudal_impulsion") — zero-rename convenience over
   literature alignment; revisit if it causes confusion in docs.
 
-# Lessons
+## D06 — EDA findings that bind later steps (step 3)
+
+- **Digitals proven pure:** n_other == 0 for all 8 signals on the full
+  1,516,948 rows -> closes the assumption D04's int8 cast depended on.
+- **TP3 ≈ Reservoirs** (same connected air volume, values identical to 3
+  decimals) -> step-4 check: mean(|TP3 − Reservoirs|) < ε.
+- **COMP + DV_eletric ≈ 1** (observed 0.998) -> step-4 check: antiphase
+  valve signals.
+- **Motor_current mode mapping (corrected):** ~0 A = off; ~3.9 A =
+  OFFLOADED running (motor on, intake closed, no compression);
+  ~5.5–6.2 A = under load. Initial reading (3.9 A = load, 6 A = start
+  transient) was WRONG — refuted by cross-referencing TP2/COMP in time.
+  Consequence: any "loaded state" definition downstream keys on
+  COMP/DV_eletric, with Motor_current thresholds as corroboration only.
+- **TP2 idle zero-offset (~−0.012 bar):** calibration behavior, not error
+  -> analog range checks must allow small negative pressures.
+- **DV_pressure 9.8 bar sample:** real maintenance/test episode on
+  2020-04-06 14:18 (rapid loaded cycling after a 1h50m gap -> discharge
+  spike -> offloaded standby). Behavior, not error. 12 days before F1;
+  presumed unrelated.
+
+## Open questions
+- **OQ1 — Digital polarity suspected inverted vs docs:** Oil_level (0.904
+  active, docs say active = low oil) and Pressure_switch (0.991 active,
+  docs say event detector). Test after step 5: state flips around the
+  documented June oil-leak failure window.
+- **OQ2 — Post-gap behavior:** the one anomaly investigated sat 9 minutes
+  after a recording gap ended. Are anomalies/maintenance clustered around
+  gaps? If yes, minutes following a gap are not ordinary minutes -> may
+  need a warm-up/exclusion rule in feature building.
+
+# Lessons 
 
 ## L01 
 - IPython magics take no trailing comments
@@ -68,3 +99,26 @@
   -> consistency checks must test the MODAL interval, not assert exact 10s.
 - Read a "junk" column before dropping it; this one held the only evidence
   of how the dataset was made.
+
+## L03 (from step 3)
+
+- **A tool classifying my own processed data is not independent validation**
+  — AutoViz "confirming" 7 numeric + 8 boolean columns was reading back my
+  D04 dtypes. Real validation = the full-data n_other check.
+- **Auto-EDA tools are a 10-minute skim, not an artifact pipeline** —
+  AutoViz on pandas 3 needed a shim, is time-blind and sampled, and had
+  flaky export. Timebox convenience tools; cut losses.
+- **Distributions hide time** — every real insight of step 3 (mode
+  mapping, the maintenance episode, gap adjacency) required timeline
+  plots. Histograms raise questions; timelines answer them.
+- **One-sensor conclusions are provisional** — the DV_pressure story only
+  resolved, and the Motor_current mode labels only got corrected, when
+  TP2/COMP/Motor_current were read together in time.
+- **A truncated plot window is data speaking** — the missing left edge of
+  the ±2h window revealed the recording gap adjacent to the anomaly.
+- **Log-scale histograms are mandatory for two-state machines** — the
+  linear grid hid every small mode and every tail; log=True exposed all
+  of the Q4 findings.
+- **Read a "junk" signal before dismissing it** (pattern repeating from
+  step 2's Unnamed: 0): the single weird DV_pressure sample led to a
+  corrected mode mapping and the post-gap question.
