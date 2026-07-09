@@ -111,11 +111,13 @@ def plot_digital_summary(summary: pd.DataFrame):
     raise NotImplementedError
 
 def save_fig(fig, name: str, cfg: dict, dpi: int = 120) -> Path:
-    """Save a figure to cfg['paths']['figures'] as <name>.png; returns the path."""
+    """Save to cfg['paths']['figures']/<name>.png, CLOSE the figure, return path.
+    Closing prevents duplicate inline rendering and memory buildup."""
     out_dir = Path(cfg["paths"]["figures"])
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{name}.png"
     fig.savefig(out, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)          # <- the fix
     return out
 
     raise NotImplementedError
