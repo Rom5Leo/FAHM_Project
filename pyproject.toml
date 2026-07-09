@@ -18,6 +18,7 @@ scikit-learn = "^1.9.0"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^7.3.0"
+autoviz = "^0.1.905"
 
 [build-system]
 requires = ["poetry-core"]
