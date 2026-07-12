@@ -51,7 +51,6 @@
   literature alignment; revisit if it causes confusion in docs.
 
 ## D06 — EDA findings that bind later steps (step 3)
-
 - **Digitals proven pure:** n_other == 0 for all 8 signals on the full
   1,516,948 rows -> closes the assumption D04's int8 cast depended on.
 - **TP3 ≈ Reservoirs** (same connected air volume, values identical to 3
@@ -71,13 +70,15 @@
   spike -> offloaded standby). Behavior, not error. 12 days before F1;
   presumed unrelated.
 
-  ## D07 — Fault types corrected against the primary source
+## D07 — Fault types corrected against the primary source
 - Observed: the source failure table lists ALL FOUR failures as Air Leak.
-  My earlier "June oil leak" label came from unverified secondary memory.
-- Choice: failure_windows now transcribed from the source table into config
-  (with maintenance dates from the Report column). Source numbering reads
-  #1,#1,#3,#4 — second row assumed a typo for #2.
-- Consequence: OQ1's test redesigned (no oil-leak window exists to test against).
+  The earlier "June oil leak" label came from unverified secondary memory.
+- Choice: failure_windows transcribed from the source table into
+  configs/config.yaml, including the maintenance dates from the Report
+  column. Source numbering reads #1,#1,#3,#4 — second row assumed a typo
+  for #2.
+- Consequence: OQ1's test redesigned (no oil-leak window exists to test
+  against). Every future evaluation number traces to this verified table.
 
 ## D08 — Check thresholds derived from measurements (step 3)
 - tp3_reservoirs_eps = 0.01: 5x observed mean |TP3-Reservoirs| (0.0019);
@@ -91,26 +92,31 @@
 - gap_threshold_seconds = 60: jitter tops out ~22s, real holes are
   minutes+; 60 sits between. Revisit after step 4's gap inventory.
 
+---
 
-## Open questions
-## OQ1 (redesigned) — Digital polarity vs docs
+# Open Questions
+
+### OQ1 (redesigned) — Digital polarity vs docs
 - Oil_level 0.904 active / Pressure_switch 0.991 active contradict their
   documented meanings. Test: when does the INACTIVE time occur — clustered
   (failures/maintenance/gaps) or scattered? Run after step 5 context exists.
 
-## OQ2 — Post-gap behavior
+### OQ2 — Post-gap behavior
 - The one investigated anomaly began 9 min after a 1h50m gap ended. Are
   anomalies clustered near gaps? If yes, post-gap minutes may need a
   warm-up/exclusion rule in feature building.
 
-# Lessons 
+---
 
-## L01 
-- IPython magics take no trailing comments
-- autoreload refreshes code but not variables already in memory (re-run cells that created data after editing functions)
+# Lessons
+
+### L01 — Environment & notebook mechanics
+- IPython magics take no trailing comments.
+- autoreload refreshes code but not variables already in memory (re-run
+  cells that CREATED data after editing functions).
 - "Python 3.11" in VSC's picker can be several different environments.
 
-## L02
+### L02 — What the raw data revealed (step 2)
 - The "Unnamed: 0" column stepped 0,10,20,... — it was the ORIGINAL 1Hz row
   index, proving Kaggle downsampled by DECIMATION (every 10th sample), not
   averaging. Values are instantaneous snapshots: slightly noisier, and
@@ -122,14 +128,16 @@
 - Read a "junk" column before dropping it; this one held the only evidence
   of how the dataset was made.
 
-## L03 (from step 3)
-
+### L03 — EDA method (step 3)
 - **A tool classifying my own processed data is not independent validation**
   — AutoViz "confirming" 7 numeric + 8 boolean columns was reading back my
   D04 dtypes. Real validation = the full-data n_other check.
 - **Auto-EDA tools are a 10-minute skim, not an artifact pipeline** —
   AutoViz on pandas 3 needed a shim, is time-blind and sampled, and had
   flaky export. Timebox convenience tools; cut losses.
+- **Auto-DQ advice assumes i.i.d. tabular data** — "5130 duplicate rows"
+  after dropping timestamp, and "cap the outliers" on a two-state machine,
+  were both nonsense here.
 - **Distributions hide time** — every real insight of step 3 (mode
   mapping, the maintenance episode, gap adjacency) required timeline
   plots. Histograms raise questions; timelines answer them.
@@ -144,3 +152,6 @@
 - **Read a "junk" signal before dismissing it** (pattern repeating from
   step 2's Unnamed: 0): the single weird DV_pressure sample led to a
   corrected mode mapping and the post-gap question.
+- **Verify labels against the primary source before building tests on
+  them** — one unverified word ("oil") nearly aimed an entire
+  investigation at the wrong target.
