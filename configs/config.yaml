@@ -30,9 +30,11 @@ checks:
   valve_antiphase_eps: 0.02    # |mean(COMP+DV_eletric) - 1|; observed sum 0.998 (step 3)
 
 failure_windows:
-  # Source: MetroPT-3 failure report table (<note where you found it: paper/Kaggle page>)
+  # Source: failure report table in the Kaggle dataset's PDF documentation
+  # dates load as strings; parsed in code
+  # F2 maintenance reads 30Apr in source — precedes the failure; likely typo for 30May, recorded as-is
   # NB: source table numbering reads #1,#1,#3,#4 — second row assumed typo for #2.
-  - {failure_id: F1, fault_type: air_leak, start: 2020-04-18 00:00, end: 2020-04-18 23:59}
-  - {failure_id: F2, fault_type: air_leak, start: 2020-05-29 23:30, end: 2020-05-30 06:00}
-  - {failure_id: F3, fault_type: air_leak, start: 2020-06-05 10:00, end: 2020-06-07 14:30}
-  - {failure_id: F4, fault_type: air_leak, start: 2020-07-15 14:30, end: 2020-07-15 19:00}
+  - {failure_id: F1, fault_type: air_leak, start: 2020-04-18 00:00, end: 2020-04-18 23:59, maintenance: null}          # no report entry
+  - {failure_id: F2, fault_type: air_leak, start: 2020-05-29 23:30, end: 2020-05-30 06:00, maintenance: 2020-04-30 12:00}
+  - {failure_id: F3, fault_type: air_leak, start: 2020-06-05 10:00, end: 2020-06-07 14:30, maintenance: 2020-06-08 16:00}
+  - {failure_id: F4, fault_type: air_leak, start: 2020-07-15 14:30, end: 2020-07-15 19:00, maintenance: 2020-07-16 00:00}
