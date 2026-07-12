@@ -71,15 +71,37 @@
   spike -> offloaded standby). Behavior, not error. 12 days before F1;
   presumed unrelated.
 
+  ## D07 — Fault types corrected against the primary source
+- Observed: the source failure table lists ALL FOUR failures as Air Leak.
+  My earlier "June oil leak" label came from unverified secondary memory.
+- Choice: failure_windows now transcribed from the source table into config
+  (with maintenance dates from the Report column). Source numbering reads
+  #1,#1,#3,#4 — second row assumed a typo for #2.
+- Consequence: OQ1's test redesigned (no oil-leak window exists to test against).
+
+## D08 — Check thresholds derived from measurements (step 3)
+- tp3_reservoirs_eps = 0.01: 5x observed mean |TP3-Reservoirs| (0.0019);
+  tp3_reservoirs_max = 0.5: observed max 0.182.
+- valve_antiphase_eps = 0.02: observed |mean(COMP+DV_eletric)-1| = 0.0024,
+  ~8x headroom. Antiphase holds in 98.9% of samples; 16,762 violations
+  match the expected count of load/unload transitions caught mid-switch
+  by 10s snapshots — boundary sampling, not a third state.
+- analog_ranges: observed 7-month min/max per sensor + margin with inline
+  reason. These are "sensor broken" tripwires, NOT anomaly detection.
+- gap_threshold_seconds = 60: jitter tops out ~22s, real holes are
+  minutes+; 60 sits between. Revisit after step 4's gap inventory.
+
+
 ## Open questions
-- **OQ1 — Digital polarity suspected inverted vs docs:** Oil_level (0.904
-  active, docs say active = low oil) and Pressure_switch (0.991 active,
-  docs say event detector). Test after step 5: state flips around the
-  documented June oil-leak failure window.
-- **OQ2 — Post-gap behavior:** the one anomaly investigated sat 9 minutes
-  after a recording gap ended. Are anomalies/maintenance clustered around
-  gaps? If yes, minutes following a gap are not ordinary minutes -> may
-  need a warm-up/exclusion rule in feature building.
+## OQ1 (redesigned) — Digital polarity vs docs
+- Oil_level 0.904 active / Pressure_switch 0.991 active contradict their
+  documented meanings. Test: when does the INACTIVE time occur — clustered
+  (failures/maintenance/gaps) or scattered? Run after step 5 context exists.
+
+## OQ2 — Post-gap behavior
+- The one investigated anomaly began 9 min after a 1h50m gap ended. Are
+  anomalies clustered near gaps? If yes, post-gap minutes may need a
+  warm-up/exclusion rule in feature building.
 
 # Lessons 
 
