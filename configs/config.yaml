@@ -3,7 +3,7 @@
 
 paths:
   raw_csv: "data/raw/MetroPT3(AirCompressor).csv"   # quoted: contains ( )
-  processed: data/processed/          # filename+format decided in step 6
+  processed: data/processed/sensor_readings.parquet   # D11
   failure_windows: data/processed/failure_windows.csv
   figures: docs/figures/
 

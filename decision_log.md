@@ -103,7 +103,31 @@
   alert ("monitoring is blind") — escalation policy belongs to the operator.
 - Deferred: per-check severity (corruption = always fatal vs drift = warn)
   via a severity column — add when a real case demands it, not before.
+- Raise-gate sabotage-verified (TP2 ceiling→5 in deep-copied config): 
+  warn mode reported the red row, raise mode halted with formatted failure list;
+  violation count 230,162 ≈ the 15-16% load duty — even the sabotage was physically consistent. Real cfg unaffected.
 
+## D10 — One notebook per pipeline stage
+- Choice: stage notebooks — 01 preprocessing, 02 EDA, then (as stages
+  begin) 03 anomaly context, 04 features, 05 model. Program convention.
+- Contract: each notebook consumes the SAVED ARTIFACT of the previous
+  (e.g. 02_eda loads the processed parquet), never re-runs its work.
+- Origin: the original notebook had mixed preprocessing+EDA; split
+  accordingly, EDA setup carries a TODO to switch from load_raw to the
+  processed file once save_processed exists.
+
+## D11 — Processed artifact: parquet, full path in config
+- Choice: save the typed, validated table as parquet at
+  data/processed/sensor_readings.parquet; the FULL path (with filename)
+  lives in config, not in code.
+- Why parquet: preserves dtypes (CSV would turn everything back into
+  strings and force re-parsing on every load); compressed and columnar
+  (fast, can read selected columns); safe and portable (pickle is
+  Python-only and unsafe to load from untrusted sources).
+- Why path in config: the artifact's location is a parameter other
+  notebooks depend on (02_eda loads it) — parameters live in config (D00).
+- Guard: save_processed refuses a directory-only path with an
+  instructive error (verified live: it caught the stale config value).
 ---
 
 # Open Questions
