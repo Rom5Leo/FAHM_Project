@@ -92,6 +92,18 @@
 - gap_threshold_seconds = 60: jitter tops out ~22s, real holes are
   minutes+; 60 sits between. Revisit after step 4's gap inventory.
 
+## D09 — Check failure policy: pure function + caller-chosen posture
+- Choice: run_checks computes the full results table always; on_fail
+  parameter decides posture — "warn" (return table, default; notebook era)
+  or "raise" (halt; for any future unattended script). All checks run
+  before raising, so one run reveals all failures.
+- Reason: checks validate DATA TRUST, not failure risk (that's the model's
+  job). Exploration needs the failing data alive; automation needs a gate.
+- Deployment note: in production, check failures would feed an operations
+  alert ("monitoring is blind") — escalation policy belongs to the operator.
+- Deferred: per-check severity (corruption = always fatal vs drift = warn)
+  via a severity column — add when a real case demands it, not before.
+
 ---
 
 # Open Questions
