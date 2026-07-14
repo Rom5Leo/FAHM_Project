@@ -91,6 +91,10 @@
   reason. These are "sensor broken" tripwires, NOT anomaly detection.
 - gap_threshold_seconds = 60: jitter tops out ~22s, real holes are
   minutes+; 60 sits between. Revisit after step 4's gap inventory.
+- REVISITED (per plan): inventory = 331 gaps, smallest 1.73 min (clearly a
+  recording stop, far above the ≤22s jitter zone — no borderline cases),
+  total 54,571 min ≈ 37.9 days ≈ 18% of the span unrecorded. Threshold 60s
+  KEPT. Coverage fact -> Summary cell + all downstream time-based reasoning.
 
 ## D09 — Check failure policy: pure function + caller-chosen posture
 - Choice: run_checks computes the full results table always; on_fail
@@ -128,6 +132,31 @@
   notebooks depend on (02_eda loads it) — parameters live in config (D00).
 - Guard: save_processed refuses a directory-only path with an
   instructive error (verified live: it caught the stale config value).
+
+## D12 — Skew→log→correlation recipe rejected for analog sensors
+- Context: the DS-program EDA recipe (skewness check -> log1p transform of
+  |skew|>1 columns -> Pearson vs Spearman comparison) was considered for
+  the analog sensors.
+- Observed: high "skewness" values here describe MODE STRUCTURE, not tails
+  — TP2/Motor_current/DV_pressure are mixtures of machine states
+  (idle/offloaded/load), each mode itself narrow. The recipe's assumption
+  (unimodal continuous feature with a skewed tail) does not hold; log1p is
+  also inapplicable mechanically (TP2/H1/DV_pressure go slightly negative
+  from zero-offset, D06).
+- Choice: compute BOTH Pearson and Spearman heatmaps (comparison habit
+  kept), but skip the transform pipeline; interpret correlation clusters
+  as shared machine state, not feature redundancy. Feature-selection-style
+  conclusions are deferred to ENGINEERED features (decay slopes, duty),
+  where correlations mean what the recipe assumes.
+- Note: same-timestamp correlation is blind to LAGGED coupling (e.g.
+  Oil_temperature follows workload with delay) — a known limitation, not
+  an absence of relationship.
+
+## D13 - Group comparison (the t-test recipe)
+ - In the classification project, t-tests compared features across target classes. Here groups exist but must be constructed: rows labeled healthy / pre-failure / in-failure from the failure windows. 
+ - Two recipe adjustments (L04 pattern): sensors are state mixtures → rank-based comparison (Mann-Whitney) over t-test; and 10-second samples are heavily autocorrelated → with n≈1.5M dependent samples every p-value is vanishingly small, so p-values are meaningless here. We therefore compare groups by effect size and distribution overlap — the quantity that actually predicts early-warning detectability — and defer the comparison itself to stage 3, where the labels are built. 
+ - The model's early-warning evaluation is the real significance test.
+
 ---
 
 # Open Questions
@@ -191,3 +220,13 @@
 - **Verify labels against the primary source before building tests on
   them** — one unverified word ("oil") nearly aimed an entire
   investigation at the wrong target.
+
+### L04 — Recipes carry assumptions (step "02 EDA")
+- The skew->log->Pearson pipeline assumes unimodal continuous features.
+  On a state machine's sensors, "skewness" is bimodality in disguise and
+  the prescribed cure (log transform) moves the modes without fixing
+  anything — and can't even run (negative values).
+- Habit: before running a taught recipe, check its assumptions against
+  the data's NATURE (states vs distributions, time series vs i.i.d.).
+  This is the second instance of the pattern — auto-DQ advice (L03)
+  failed here for the same underlying reason: i.i.d. tabular assumptions.
