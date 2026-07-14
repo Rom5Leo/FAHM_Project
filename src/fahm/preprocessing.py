@@ -228,3 +228,7 @@ def save_processed(df: pd.DataFrame, cfg: dict) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out, index=False)
     return out
+
+def load_processed(cfg: dict) -> pd.DataFrame:
+    """Load the saved artifact — the entry point for every later notebook (D10)."""
+    return pd.read_parquet(cfg["paths"]["processed"])

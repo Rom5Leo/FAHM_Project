@@ -52,7 +52,6 @@ def auto_eda_pdf(df: pd.DataFrame, out_pdf: str | Path,
     plt.close("all")
     return out_pdf
 
-    raise NotImplementedError
 
 def plot_analog_distributions(df: pd.DataFrame, bins: int = 60, log: bool = False):
     """One histogram per ANALOG sensor in a 2x4 grid. Returns the figure.
@@ -69,7 +68,6 @@ def plot_analog_distributions(df: pd.DataFrame, bins: int = 60, log: bool = Fals
     fig.tight_layout()
     return fig
 
-    raise NotImplementedError
 
 
 def digital_summary(df: pd.DataFrame) -> pd.DataFrame:
@@ -93,7 +91,6 @@ def digital_summary(df: pd.DataFrame) -> pd.DataFrame:
         })
     return pd.DataFrame(rows).set_index("signal")
 
-    raise NotImplementedError
 
 def plot_digital_summary(summary: pd.DataFrame):
     """Horizontal bars of frac_active per digital signal. Returns the figure.
@@ -108,7 +105,6 @@ def plot_digital_summary(summary: pd.DataFrame):
     fig.tight_layout()
     return fig
 
-    raise NotImplementedError
 
 def save_fig(fig, name: str, cfg: dict, dpi: int = 120) -> Path:
     """Save to cfg['paths']['figures']/<name>.png, CLOSE the figure, return path.
@@ -120,7 +116,6 @@ def save_fig(fig, name: str, cfg: dict, dpi: int = 120) -> Path:
     plt.close(fig)          # <- the fix
     return out
 
-    raise NotImplementedError
 
 
 def plot_sensor_timeline(df: pd.DataFrame, sensor: str, start=None, end=None):
@@ -140,4 +135,33 @@ def plot_sensor_timeline(df: pd.DataFrame, sensor: str, start=None, end=None):
     fig.tight_layout()
     return fig
 
-    raise NotImplementedError
+def plot_correlation_heatmaps(df: pd.DataFrame, cols: list[str] | None = None):
+    """Pearson and Spearman correlation heatmaps side by side. Returns the figure.
+ 
+    Two methods on purpose (program habit, kept): agreement = robust
+    association; disagreement = outliers / non-linearity at work.
+    Interpretation caveat for THIS dataset: analog sensors are state
+    MIXTURES (load/idle), so both matrices are dominated by the shared
+    machine state — read clusters as "same state", not redundancy (D12).
+    """
+
+    cols = cols or ANALOG
+    methods = ("pearson", "spearman")
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6), layout="constrained")
+    for ax, method in zip(axes, methods):
+        corr = df[cols].corr(method=method)
+        im = ax.imshow(corr, cmap="coolwarm", vmin=-1, vmax=1)
+        ax.set_xticks(range(len(cols)))
+        ax.set_yticks(range(len(cols)))
+        ax.set_xticklabels(cols, rotation=45, ha="right")
+        ax.set_yticklabels(cols)
+        ax.set_title(f"{method.capitalize()} correlation")
+
+        # annotate each cell with its value
+        for i in range(len(cols)):
+            for j in range(len(cols)):
+                v = corr.iloc[i,j]
+                ax.text(j,i, f"{v:.2f}", ha="center", va="center", fontsize=8, color="white" if abs(v) > 0.6 else "black")
+
+    fig.colorbar(im, ax=axes, shrink=0.8)
+    return fig
