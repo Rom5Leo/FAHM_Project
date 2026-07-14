@@ -4,7 +4,8 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 
-data/
+data/processed
+notebooks/old
 models/
 *.parquet
 *.csv
