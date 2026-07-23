@@ -181,7 +181,15 @@
       guard the search range crossing a gap would fabricate episodes.
 - Consumers: section 6 labeling (invalid-sample masking), stage-4
   instrument-health features, any future monitoring use.
-  
+
+## D16 — OQ1 resolved: both suspect digitals are inverted event-detectors
+- Pressure_switch: off-time is entirely sub-minute flickers (11,814 runs,
+  median 0.17 min, max 0.7 min, none > 1h) -> brief-event detector with
+  INVERTED polarity vs docs (active = normal; momentary drop = the event).
+- Oil_level: same flicker behavior (~7,660 runs) PLUS 8 long episodes.
+- Sensor-meaning table corrected accordingly; the 0.90/0.99 "active"
+  fractions from step 3 are explained and not anomalous.
+
 ---
 
 # Open Questions
@@ -212,6 +220,21 @@
 - STAKES: labeling. If Apr 18-30 was degraded, it must NOT be labeled
   healthy in group comparisons / any future training reference; failure
   count for evaluation may be 3 distinct failures, not 4.
+
+### OQ4 — August Oil_level regime (unresolved, scoped)
+- Observation: 7 of Oil_level's 8 long inactive episodes fall Jul 30-Aug 28
+  (median ~20h, longest 9.5 days), while the machine runs normally
+  (duty 0.158 inside vs 0.161 outside) and far from documented events
+  (12% within 3 days vs 31% expected by chance; median distance 34.8 d).
+  The 8th (Apr 20) is attributed to the known instrument-fault window.
+- Candidate explanations, by parsimony: (a) sensor degradation after ~6
+  months of service; (b) a real oil-circuit condition; (c) changed
+  operation/maintenance practice. NOT resolvable from this data — all
+  documented failures are air leaks and the record ends Sep 1 with no
+  outcome to validate against.
+- Why it is logged: MODELING consequence. Any detector trained on the full
+  record will flag August heavily; this entry documents the cause so the
+  decision (signal vs noise vs exclusion) is deliberate.
 
 ---
 
@@ -279,3 +302,38 @@
   xlim to the data and treat markers as guests, not owners.
 - Bonus: the "bug" was the config's flagged source oddity resurfacing —
   the paper trail worked in reverse (yaml comment -> visual anomaly).
+
+  ### L06 — A proximity claim without a base rate is unfalsifiable (OQ2)
+- Exhibit A was vivid: F3's 1,288-min gap starts 11 minutes before its
+  failure window ends and recording resumes hours before the logged
+  maintenance. It suggested a general rule — "recording stops around
+  repairs" — that was about to become a feature-engineering warm-up rule.
+- The base-rate control refuted it: with 331 gaps over 175 days (~1.9/day),
+  every event has gaps nearby by construction. Gaps near failures are in
+  fact SMALLER than typical (median 16.6 min vs 62.1 min elsewhere), and
+  only 15% of the twenty largest gaps sit near any known event; the top-15
+  gaps are mostly 5–49 days from the nearest failure/maintenance.
+- Habit: when claiming "X happens near Y", always ask what "near Y" looks
+  like by chance. State the base rate, then compare magnitude, not just
+  presence. A single dramatic case is an anecdote until the control runs.
+- Related: L03/L04 (recipes and tools carry assumptions) — same family of
+  error, different disguise: here the assumption was that co-occurrence is
+  evidence.
+
+  ### L07 — Passing tests are not correctness
+- find_state_episodes passed five synthetic edge-case tests, then produced
+  a reversed episode on real data: overlapping refinement brackets allowed
+  non-monotonic flip times. My tests modeled clean single transitions;
+  real data is ragged.
+- Fixes: clamp refined flips to be monotonic; drop degenerate (zero-length)
+  episodes with a printed count; and make the function VALIDATE ITS OWN
+  OUTPUT (raise on end <= start) — the run_checks philosophy applied to my
+  own code.
+- Habit: model the messiness in tests, and let functions refuse to return
+  nonsense.
+
+### L08 — The base-rate control keeps paying (OQ1, after OQ2)
+- Oil_level episodes near events: 12% within 3 days vs 31% expected by
+  chance — not just "no clustering" but LESS than chance. Without the
+  control, "one episode is 1.2 days from F1" could have been written up as
+  a link; it is in fact the known Apr 20 instrument fault.
