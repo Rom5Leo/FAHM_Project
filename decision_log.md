@@ -165,6 +165,23 @@
 - Principle: a marker must never dictate the zoom; source dates stay
   as transcribed (D07 rule: transcribe faithfully, annotate skeptically).
 
+## D15 — Episode boundary finder: design before code
+- Need: locate start/end of binary conditions in time (first case: the
+  Apr 20 instrument fault) without eyeballing printouts.
+- Design choices:
+  (a) DETECTOR/FINDER SPLIT — find_state_episodes(df, predicate, ...) hunts
+      transitions of ANY boolean window-predicate; stuck_instrument() is
+      just one predicate. One search algorithm, many detectors.
+  (b) SCAN, NOT BISECT — bisection assumes exactly one transition in the
+      bracket; episodes can flicker. Coarse scan at Δ finds ALL flips;
+      each flip's bracket is re-scanned at finer Δ. Flicker-proof, and
+      naturally returns multiple (start, end) episodes.
+  (c) GAP ≠ FAULT — windows with no data return False from the predicate;
+      recording gaps are OQ2's domain, not instrument faults. Without this
+      guard the search range crossing a gap would fabricate episodes.
+- Consumers: section 6 labeling (invalid-sample masking), stage-4
+  instrument-health features, any future monitoring use.
+  
 ---
 
 # Open Questions
