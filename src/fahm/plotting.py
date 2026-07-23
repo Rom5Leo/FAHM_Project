@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 from pathlib import Path
 
 from fahm.preprocessing import ANALOG, DIGITAL, TIMESTAMP
@@ -164,4 +165,39 @@ def plot_correlation_heatmaps(df: pd.DataFrame, cols: list[str] | None = None):
                 ax.text(j,i, f"{v:.2f}", ha="center", va="center", fontsize=8, color="white" if abs(v) > 0.6 else "black")
 
     fig.colorbar(im, ax=axes, shrink=0.8)
+    return fig
+
+def outliers_boxplot(df):
+    """A function that prints boxplts of outliers"""
+    fig = plt.figure(figsize=(20,200))
+    
+    for i, col in enumerate(df.columns):
+        if col != 'timestamp':
+            ax = plt.subplot(60, 3, i+1)
+            sns.boxplot(data=df, x=col, ax=ax)
+            plt.subplots_adjust(hspace = 0.7)
+            plt.title('Box Plot: {}'.format(col), fontsize=15)
+            plt.xlabel('{}'.format(col), fontsize=14)
+    
+    return fig
+
+def plot_failure_context(df, fw_row, sensors, pad_days=2):
+    """Stacked timelines of `sensors` around one failure window (shaded),
+    with a maintenance marker if present. fw_row = one row of the fw table."""
+    lo = fw_row["start"] - pd.Timedelta(days=pad_days)
+    hi = fw_row["end"] + pd.Timedelta(days=pad_days)
+    win = df[(df[TIMESTAMP] >= lo) & (df[TIMESTAMP] <= hi)]
+
+    fig, axes = plt.subplots(len(sensors), 1, figsize=(15, 2.5 * len(sensors)),
+                             sharex=True, layout="constrained")
+    for ax, sensor in zip(axes, sensors):
+        ax.plot(win[TIMESTAMP], win[sensor], lw=0.5)
+        ax.set_ylabel(sensor)
+        ax.axvspan(fw_row["start"], fw_row["end"], color="red", alpha=0.15)
+        if pd.notna(fw_row["maintenance"]) and lo <= fw_row["maintenance"] <= hi:
+            ax.axvline(fw_row["maintenance"], color="green", ls="--", lw=1)
+
+    axes[-1].set_xlim(lo, hi)     # sharex propagates to all panels
+    axes[0].set_title(f"{fw_row['failure_id']} ({fw_row['fault_type']}) — "
+                      "red = failure window, green = maintenance")
     return fig

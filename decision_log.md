@@ -157,6 +157,14 @@
  - Two recipe adjustments (L04 pattern): sensors are state mixtures → rank-based comparison (Mann-Whitney) over t-test; and 10-second samples are heavily autocorrelated → with n≈1.5M dependent samples every p-value is vanishingly small, so p-values are meaningless here. We therefore compare groups by effect size and distribution overlap — the quantity that actually predicts early-warning detectability — and defer the comparison itself to stage 3, where the labels are built. 
  - The model's early-warning evaluation is the real significance test.
 
+## D14 — Failure-context plot: view clamped to data window
+- Problem: axvline for F2's maintenance marker (2020-04-30, the flagged
+  source oddity) stretched the x-axis a month wide, crushing the data.
+- Choice: set_xlim(lo, hi) always; maintenance marker drawn only if inside
+  the view, otherwise noted in the title text ("maintenance off-window").
+- Principle: a marker must never dictate the zoom; source dates stay
+  as transcribed (D07 rule: transcribe faithfully, annotate skeptically).
+
 ---
 
 # Open Questions
@@ -170,6 +178,23 @@
 - The one investigated anomaly began 9 min after a 1h50m gap ended. Are
   anomalies clustered near gaps? If yes, post-gap minutes may need a
   warm-up/exclusion rule in feature building.
+
+### OQ3 — Are F1 and F2 one failure? (reading the source's #1,#1,#3,#4)
+- Hypothesis: the duplicate "#1" is deliberate — F1.a (Apr 18) and
+  F1.b (May 29) are episodes of ONE failure; row 2's "maintenance 30 Apr"
+  is then the response to episode a, and the recurrence means the fix was
+  incomplete. Explains both source quirks with zero typos.
+- Counter-point: the sequence then has no failure #2 (undocumented event?
+  the Apr 6 episode?), and episode b's resolution is unlogged.
+- Tests (all in 03):
+  (t1) Does Apr 30 ~12:00 have a maintenance footprint in the data
+       (gap / depressurization / test-cycling like Apr 6)?
+  (t2) Is Apr 18-30 measurably unhealthy (duty/decay elevated vs early
+       April) — a continuing leak — or does it look fully healthy?
+  (t3) Is the ~May 31 TP3/oil plunge a repair signature (what ended b)?
+- STAKES: labeling. If Apr 18-30 was degraded, it must NOT be labeled
+  healthy in group comparisons / any future training reference; failure
+  count for evaluation may be 3 distinct failures, not 4.
 
 ---
 
@@ -230,3 +255,10 @@
   the data's NATURE (states vs distributions, time series vs i.i.d.).
   This is the second instance of the pattern — auto-DQ advice (L03)
   failed here for the same underlying reason: i.i.d. tabular assumptions.
+
+### L05 — A far-away artist ruins the view
+- matplotlib autoscales to include EVERYTHING drawn; one off-window marker
+  compressed 5 days of data into blocks. Robust plot functions clamp
+  xlim to the data and treat markers as guests, not owners.
+- Bonus: the "bug" was the config's flagged source oddity resurfacing —
+  the paper trail worked in reverse (yaml comment -> visual anomaly).
