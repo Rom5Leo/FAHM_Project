@@ -359,3 +359,24 @@
   interior. The analysis window must be wider than the phenomenon, or you
   measure its middle and call it its edge. find_state_episodes exists
   precisely to find boundaries by measurement, not eyeball.
+
+### L10 — Effect-size metric must match the feature's type
+- The robust effect size (median shift / IQR) is built for continuous
+  variables. Applied to a binary signal it returns NaN — a binary's healthy
+  IQR is 0, so the division is undefined. DV_eletric's NaN in the first
+  effect table was NOT missing signal; it was the wrong metric silently
+  failing.
+- Fix: a single type-aware effect_sizes() that dispatches by feature —
+  continuous -> median-shift/IQR (robust, D12-friendly for state mixtures);
+  binary -> activation-rate difference (mean_grp - mean_ref) + ratio. A
+  `method` column records which was used, since effects are sortable within
+  a type but not strictly comparable across.
+- This replaced two patch functions (prefail_effect_by_failure_old,
+  duty_shift_by_failure) that existed only to work around the NaN — one
+  type-aware function subsumed both. Verified the binary row matched the old
+  duty helper before deleting.
+- Habit (same family as L03/L04): a statistic that "runs" is not a statistic
+  that "applies" — check the metric's assumptions against the variable's
+  type, not just whether it returns a number.
+
+

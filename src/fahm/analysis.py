@@ -309,3 +309,81 @@ def label_windows(df, fw, cfg=None, prefail_hours=48, postrepair_hours=24,
         mark((ts >= pd.Timestamp(lo)) & (ts <= pd.Timestamp(hi)), "invalid")
 
     return labels
+
+def effect_sizes(df, labels, features, ref="healthy", grp="prefail", digital=None):
+    """One effect-size table for all features. Metric chosen per feature type:
+      binary (in `digital`) -> activation-rate difference
+      continuous            -> robust effect (median shift / IQR_ref)
+    Always reports median_ref, median_grp, effect, and ratio (grp/ref)."""
+    from fahm.preprocessing import DIGITAL
+    digital = set(digital) if digital is not None else set(DIGITAL)
+    a, b = df[labels == ref], df[labels == grp]
+
+    rows = []
+    for f in features:
+        ma, mb = a[f].median(), b[f].median()
+        if f in digital:
+            ra, rb = a[f].mean(), b[f].mean()          # activation rate
+            effect = round(rb - ra, 3)
+            method = "rate_diff"
+            ratio = round(rb / ra, 2) if ra else float("nan")
+            ref_v, grp_v = round(ra, 3), round(rb, 3)  # show rates, not medians
+        else:
+            iqr = a[f].quantile(0.75) - a[f].quantile(0.25)
+            effect = round((mb - ma) / iqr, 2) if iqr else float("nan")
+            method = "robust"
+            ratio = round(mb / ma, 2) if ma else float("nan")
+            ref_v, grp_v = round(ma, 3), round(mb, 3)
+        rows.append({"feature": f, "method": method,
+                     "ref": ref_v, "grp": grp_v, "effect": effect, "ratio": ratio})
+    return pd.DataFrame(rows).set_index("feature")
+
+def prefail_effect_by_failure(df, fw, features, labels, hours=48):
+    ts = df[TIMESTAMP]
+    out = {}
+    for _, f in fw.iterrows():
+        pre = pd.Series("other", index=df.index)
+        pre[(ts >= f["start"] - pd.Timedelta(hours=hours)) & (ts < f["start"])] = "prefail"
+        pre[labels == "healthy"] = "healthy"
+        es = effect_sizes(df, pre, features, ref="healthy", grp="prefail")
+        out[f["failure_id"]] = es["effect"]
+    return pd.DataFrame(out).T
+
+
+def prefail_effect_by_failure_old(df, fw, features, cfg=None,
+                              prefail_hours=48, ref_label=None, healthy_mask=None):
+    """Effect size of each failure's OWN 48h-prefail window vs the healthy
+    baseline, per feature. Exposes the heterogeneity the pooled median hides
+    (F4 strong precursor vs F1 negligible)."""
+    from fahm.analysis import TIMESTAMP
+    ts = df[TIMESTAMP]
+    # healthy reference: rows labeled healthy (pass the mask in to stay consistent)
+    ref = df[healthy_mask]
+    rows = []
+    for _, f in fw.iterrows():
+        pre = df[(ts >= f["start"] - pd.Timedelta(hours=prefail_hours)) & (ts < f["start"])]
+        for feat in features:
+            iqr = ref[feat].quantile(0.75) - ref[feat].quantile(0.25)
+            shift = pre[feat].median() - ref[feat].median()
+            rows.append({"failure": f["failure_id"], "feature": feat,
+                         "effect": round(shift / iqr, 2) if iqr else float("nan")})
+    return (pd.DataFrame(rows)
+            .pivot(index="failure", columns="feature", values="effect"))
+
+def duty_shift_by_failure(df, fw, healthy_mask, signal="DV_eletric",
+                          prefail_hours=48):
+    """Activation-rate (duty) of each failure's prefail window vs healthy.
+    The right comparison for a BINARY signal (mean, not median/IQR)."""
+    from fahm.analysis import TIMESTAMP
+    ts = df[TIMESTAMP]
+    base = df.loc[healthy_mask, signal].mean()
+    rows = []
+    for _, f in fw.iterrows():
+        pre = df[(ts >= f["start"] - pd.Timedelta(hours=prefail_hours)) & (ts < f["start"])]
+        rate = pre[signal].mean()
+        rows.append({"failure": f["failure_id"],
+                     "duty_healthy": round(base, 3),
+                     "duty_prefail": round(rate, 3),
+                     "abs_shift": round(rate - base, 3),
+                     "rel_increase": round(rate / base, 2) if base else float("nan")})
+    return pd.DataFrame(rows).set_index("failure")
