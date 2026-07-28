@@ -42,6 +42,8 @@ def find_state_episodes(df, predicate, lo, hi, coarse="6h", fine="15min") -> pd.
     (gap != fault, D15c).
     """
 
+    lo, hi = pd.Timestamp(lo), pd.Timestamp(hi)
+
     def scan(a, b, step):
         edges = pd.date_range(a, b, freq=step)
         if edges[-1] < pd.Timestamp(b): #tail sliver: include
@@ -269,3 +271,41 @@ def episode_state_stats(df: pd.DataFrame, episodes: pd.DataFrame) -> pd.DataFram
             "motor_zero_share": round(float((w["Motor_current"] < 0.1).mean()), 3) if len(w) else None,
         })
     return pd.DataFrame(rows)
+
+def label_windows(df, fw, cfg=None, prefail_hours=48, postrepair_hours=24,
+                  degraded_periods=None, invalid_periods=None) -> pd.Series:
+    """Label each row for group comparison and (later) model reference.
+
+    Categories, in PRIORITY order (later rules override earlier):
+      healthy   - default: none of the below
+      prefail   - within prefail_hours BEFORE a failure window start
+      infail    - inside a failure window
+      postrepair- within postrepair_hours AFTER a window/maintenance
+      degraded  - stage-3 verified degraded spans (OQ3: Apr 18-30)
+      invalid   - stage-3 verified untrustworthy spans (Apr 20 instrument fault)
+
+    'invalid' and 'degraded' are passed explicitly (list of (start,end) str
+    pairs) because they are FINDINGS, not derivable from fw. This is why
+    healthy is trustworthy: the known-bad spans are carved out by name.
+    """
+    ts = df[TIMESTAMP]
+    labels = pd.Series("healthy", index=df.index, dtype="object")
+
+    def mark(mask, name):
+        labels[mask] = name
+
+    # apply in priority order (later wins)
+    for _, f in fw.iterrows():
+        pre = (ts >= f["start"] - pd.Timedelta(hours=prefail_hours)) & (ts < f["start"])
+        mark(pre, "prefail")
+    for _, f in fw.iterrows():
+        mark((ts >= f["start"]) & (ts <= f["end"]), "infail")
+    for _, f in fw.iterrows():
+        anchor = f["maintenance"] if pd.notna(f["maintenance"]) else f["end"]
+        mark((ts > anchor) & (ts <= anchor + pd.Timedelta(hours=postrepair_hours)), "postrepair")
+    for lo, hi in (degraded_periods or []):
+        mark((ts >= pd.Timestamp(lo)) & (ts <= pd.Timestamp(hi)), "degraded")
+    for lo, hi in (invalid_periods or []):
+        mark((ts >= pd.Timestamp(lo)) & (ts <= pd.Timestamp(hi)), "invalid")
+
+    return labels

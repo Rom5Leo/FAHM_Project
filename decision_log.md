@@ -190,6 +190,16 @@
 - Sensor-meaning table corrected accordingly; the 0.90/0.99 "active"
   fractions from step 3 are explained and not anomalous.
 
+## D17 — Row labeling for group comparison (label_windows, in analysis.py)
+- Six priority-ordered categories: healthy / prefail / infail / postrepair /
+  degraded / invalid (later overrides earlier). degraded & invalid are passed
+  BY NAME (stage-3 findings: OQ3's Apr 18-30, the Apr 20 instrument fault) —
+  not derivable from fw. This is what makes 'healthy' trustworthy.
+- Lives in analysis.py (it measures/derives, not prepares).
+- Distribution sanity-checked: healthy 88.4%, every category's size
+  physically explicable; priority override verified (Apr 20 → invalid, not
+  degraded).
+
 ---
 
 # Open Questions
@@ -323,7 +333,7 @@
   ### L07 — Passing tests are not correctness
 - find_state_episodes passed five synthetic edge-case tests, then produced
   a reversed episode on real data: overlapping refinement brackets allowed
-  non-monotonic flip times. My tests modeled clean single transitions;
+  non-monotonic flip times. My tests modeled clean single transitions;T
   real data is ragged.
 - Fixes: clamp refined flips to be monotonic; drop degenerate (zero-length)
   episodes with a printed count; and make the function VALIDATE ITS OWN
@@ -337,3 +347,15 @@
   chance — not just "no clustering" but LESS than chance. Without the
   control, "one episode is 1.2 days from F1" could have been written up as
   a link; it is in fact the known Apr 20 instrument fault.
+
+### L09 — Anchor an investigation to the phenomenon's extent, not the first thing noticed
+- The chatter investigation was initially scoped around ~13:00 — where a
+  zoomed view happened to open — and characterized the interior of an
+  already-frozen episode as if it were the start. The hourly variance probe
+  located the true onset at ~05:00 (motor_var 4.5→0.0, antiphase 0.86→0.0),
+  ~8h earlier. The stats (toggle rate, antiphase) were arithmetically valid
+  but measured over the wrong window.
+- Habit: establish an episode's BOUNDARIES before characterizing its
+  interior. The analysis window must be wider than the phenomenon, or you
+  measure its middle and call it its edge. find_state_episodes exists
+  precisely to find boundaries by measurement, not eyeball.
