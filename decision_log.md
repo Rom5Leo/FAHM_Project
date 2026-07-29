@@ -200,6 +200,31 @@
   physically explicable; priority override verified (Apr 20 → invalid, not
   degraded).
 
+## D18 — Physical units on every axis (professionalism pass)
+- UNITS map + axis_label() live in preprocessing.py beside the schema
+  constants (ANALOG/DIGITAL) — one source of truth for sensor units:
+  bar for the five pressures, °C for oil temperature, A for motor current,
+  dimensionless (marked [-]) for the eight digital signals.
+- All seven plotting functions retrofitted: value axes carry their unit,
+  time axes labeled "time", and count vs probability-density vs log-count
+  are named honestly rather than left blank.
+- Tables: units appended to markdown headers where not obvious
+  (e.g. "median [°C]").
+- Trigger: unlabeled axes caught during the 6.4 review. For a physics-facing
+  portfolio, missing units and labels read as carelessness — the fix is a
+  one-map, one-helper change so every current and future plot is consistent.
+
+## D19 — Degraded spans: evaluation ground truth, not training data
+- Tension: the Apr 18-30 degraded span IS the leak — the most valuable
+  signal we have — so hiding it wastes it; but it must not enter the healthy
+  TRAINING set (would teach the model that leaking is normal), and it can't
+  be a supervised target (n=1 degraded episode -> memorizes April, not
+  "leaking").
+- Choice: train the detector on clean HEALTHY only; use degraded (and, when
+  found, other degraded-like spans) as a SECOND evaluation target alongside
+  the failure windows. "Does a healthy-trained detector light up during known
+  degradation?" is a stronger result than failure-window detection alone.
+- The `degraded` label stays; its ROLE changes from excluded to evaluated.
 ---
 
 # Open Questions
@@ -245,6 +270,15 @@
 - Why it is logged: MODELING consequence. Any detector trained on the full
   record will flag August heavily; this entry documents the cause so the
   decision (signal vs noise vs exclusion) is deliberate.
+
+## OQ5 — Is F3 detectable at all, or under-examined?
+- F3 showed no 48h precursor in the 4 core sensors at the median level.
+  Before concluding "undetectable", widen: all analog sensors + LPS rate
+  (completeness pass, this section), and — in stage 4 — variability /
+  rate-of-change / cycle-structure features and change-point vs the machine's
+  OWN baseline (documented window may be logged late).
+- If still silent: F3 is a genuinely sudden failure. Stating that honestly is
+  a finding, not a gap.
 
 ---
 
@@ -379,4 +413,14 @@
   that "applies" — check the metric's assumptions against the variable's
   type, not just whether it returns a number.
 
+### L11 — "Redundant for describing state" ≠ "redundant for predicting failure"
+- The 4-sensor / central-tendency scope was a reasonable DEFAULT (EDA showed
+  TP3≈Reservoirs, H1/TP2 antiphase views of load state), but redundancy in
+  healthy operation doesn't imply redundancy before a fault — a sensor
+  uninformative about normal state can still diverge uniquely pre-failure.
+- Central tendency is the FLOOR of the comparison, not the ceiling; failures
+  often show first in variability/dynamics, which belong to engineered
+  features (stage 4).
+- Habit: check completeness explicitly before concluding a failure is
+  undetectable; scope choices are defaults to revisit, not conclusions.
 

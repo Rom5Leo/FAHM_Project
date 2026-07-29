@@ -43,21 +43,6 @@ DIGITAL = ["COMP", "DV_eletric", "Towers", "MPG", "LPS",
            "Pressure_switch", "Oil_level", "Caudal_impulses"]
 TIMESTAMP = "timestamp"
 
-# Physical units per sensor — the ONE source of truth for axis labels and
-# table headers (D18). Digitals are dimensionless {0,1} signals.
-UNITS = {
-    "TP2": "bar", "TP3": "bar", "H1": "bar", "DV_pressure": "bar",
-    "Reservoirs": "bar", "Oil_temperature": "\u00b0C", "Motor_current": "A",
-    **{c: "" for c in DIGITAL},
-}
-
-
-def axis_label(col: str) -> str:
-    """'Oil_temperature [\u00b0C]' for analog, bare name for dimensionless."""
-    u = UNITS.get(col, "")
-    return f"{col} [{u}]" if u else col
-
-
 def load_raw(cfg: dict) -> pd.DataFrame:
     """Typed load of the raw CSV.
 

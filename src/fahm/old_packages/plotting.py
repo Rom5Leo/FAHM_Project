@@ -10,7 +10,7 @@ Rules this module lives by (D00):
 Import the column lists from preprocessing so there is exactly ONE
 definition of the schema in the project:
 
-    from fahm.preprocessing import ANALOG, DIGITAL, TIMESTAMP, UNITS, axis_label
+    from fahm.preprocessing import ANALOG, DIGITAL, TIMESTAMP
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import pandas as pd
 import seaborn as sns
 from pathlib import Path
 
-from fahm.preprocessing import ANALOG, DIGITAL, TIMESTAMP, UNITS, axis_label
+from fahm.preprocessing import ANALOG, DIGITAL, TIMESTAMP
 
 def auto_eda_pdf(df: pd.DataFrame, out_pdf: str | Path,
                  max_rows: int = 150_000, verbose: int = 1) -> Path:
@@ -62,8 +62,6 @@ def plot_analog_distributions(df: pd.DataFrame, bins: int = 60, log: bool = Fals
     for ax, col in zip(axes.ravel(), ANALOG):
         ax.hist(df[col], bins=bins, log=log)
         ax.set_title(col)
-        ax.set_xlabel(axis_label(col))
-        ax.set_ylabel("count (log)" if log else "count")
 
     for ax in axes.ravel()[len(ANALOG):]:
         ax.set_visible(False)
@@ -101,8 +99,7 @@ def plot_digital_summary(summary: pd.DataFrame):
     s = summary["frac_active"].sort_values()
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.barh(s.index, s.values)
-    ax.set_xlabel("fraction of time active [-]")
-    ax.set_ylabel("signal")
+    ax.set_xlabel("fraction of time active")
     ax.set_xlim(0, 1.05)
     for i, v in enumerate(s.values):
         ax.text(v + 0.01, i, f"{v:.3f}", va="center")
@@ -134,8 +131,7 @@ def plot_sensor_timeline(df: pd.DataFrame, sensor: str, start=None, end=None):
 
     fig, ax = plt.subplots(figsize=(14, 4))
     ax.plot(win[TIMESTAMP], win[sensor], lw=0.5)
-    ax.set_ylabel(axis_label(sensor))
-    ax.set_xlabel("time")
+    ax.set_ylabel(sensor)
     ax.set_title(f"{sensor}  {win[TIMESTAMP].min()} → {win[TIMESTAMP].max()}")
     fig.tight_layout()
     return fig
@@ -181,7 +177,7 @@ def outliers_boxplot(df):
             sns.boxplot(data=df, x=col, ax=ax)
             plt.subplots_adjust(hspace = 0.7)
             plt.title('Box Plot: {}'.format(col), fontsize=15)
-            plt.xlabel(axis_label(col), fontsize=14)
+            plt.xlabel('{}'.format(col), fontsize=14)
     
     return fig
 
@@ -196,13 +192,12 @@ def plot_failure_context(df, fw_row, sensors, pad_days=2):
                              sharex=True, layout="constrained")
     for ax, sensor in zip(axes, sensors):
         ax.plot(win[TIMESTAMP], win[sensor], lw=0.5)
-        ax.set_ylabel(axis_label(sensor))
+        ax.set_ylabel(sensor)
         ax.axvspan(fw_row["start"], fw_row["end"], color="red", alpha=0.15)
         if pd.notna(fw_row["maintenance"]) and lo <= fw_row["maintenance"] <= hi:
             ax.axvline(fw_row["maintenance"], color="green", ls="--", lw=1)
 
     axes[-1].set_xlim(lo, hi)     # sharex propagates to all panels
-    axes[-1].set_xlabel("time")
     axes[0].set_title(f"{fw_row['failure_id']} ({fw_row['fault_type']}) — "
                       "red = failure window, green = maintenance")
     return fig
@@ -218,9 +213,6 @@ def plot_label_distributions(df, labels, features, groups=None):
             vals = df.loc[labels == g, feat].dropna()
             if len(vals):
                 ax.hist(vals, bins=50, density=True, alpha=0.45, label=g)
-        ax.set_title(feat)
-        ax.set_xlabel(axis_label(feat))
-        ax.set_ylabel("probability density")
-        ax.legend(fontsize=8)
+        ax.set_title(feat); ax.legend(fontsize=8)
     fig.tight_layout()
     return fig
