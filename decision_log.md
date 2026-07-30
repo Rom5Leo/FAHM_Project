@@ -225,6 +225,32 @@
   the failure windows. "Does a healthy-trained detector light up during known
   degradation?" is a stronger result than failure-window detection alone.
 - The `degraded` label stays; its ROLE changes from excluded to evaluated.
+
+## D20 — Feature grid design
+- **Window size:** <1h?> — fine enough to resolve 48h-precursor dynamics,
+  coarse enough that 175 days ≈ <N> windows. Rationale: <yours>.
+- **Gap rule:** windows are built WITHIN contiguous segments only (segment id
+  = (diffs > gap_threshold).cumsum()); no window bridges a recording gap.
+  Partial final window per segment: <kept / dropped> because <reason>.
+- **Look-back scales** for rolling/dynamics features: <6h / 24h / 168h?> —
+  multi-scale because stage 3 showed precursors at different horizons
+  (F4 at 48h, F3 possibly only longer).
+- **Window label:** majority row-label, EXCEPT `invalid` wins any overlap
+  (trust rule — one bad sample distrusts the window).
+- Grid size after gap losses: <N> windows, label distribution <...>.
+
+## D21 — Spectral features: cycle-rhythm, not vibration
+- Fourier/FFT for VIBRATION or acoustic fault signatures is impossible on this
+  data: 10s decimation caps Nyquist at ~1/20 Hz, so mechanical signatures
+  (bearings, valve slap; Hz-kHz) are gone (L02). This is a DATA limitation,
+  not a method choice — with kHz vibration data it would be central.
+- But the load/unload CYCLE has a minutes-scale period, well within 10s
+  resolution, and a leak makes the machine cycle faster/erratically. So the
+  dominant cycling frequency, its drift, and spectral entropy are legitimate
+  physically-motivated features (cycle_frequency_features).
+- Method: Lomb-Scargle periodogram (handles irregular sampling — jitter+gaps
+  break a plain FFT), cross-checked with duty autocorrelation. F3's long shot
+  (OQ5): it moved no central-tendency stat, but might show as a rhythm change.
 ---
 
 # Open Questions
@@ -423,4 +449,17 @@
   features (stage 4).
 - Habit: check completeness explicitly before concluding a failure is
   undetectable; scope choices are defaults to revisit, not conclusions.
+
+  ### L12 — Match the transform to what the data can resolve
+- "Signal analysis → Fourier" is a reflex; the discipline is asking what
+  frequencies survive the sampling. Vibration spectra need kHz; a 10s grid
+  supports only sub-0.05 Hz phenomena. The right spectral target here is the
+  slow cycle rhythm, and the right tool is Lomb-Scargle (not FFT) because the
+  sampling is uneven. Same family as L02/L04: transform assumptions vs data
+  reality.
+
+
+
+
+
 
