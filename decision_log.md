@@ -238,6 +238,10 @@
   segmentation excludes sparse regions before windowing, so no window is
   under-sampled. n_samples kept as a column for downstream trust weighting.
 - Look-back scales for rolling features: TBD when those families are built.
+- Window labels: majority row-label, invalid-wins-any-overlap (trust rule).
+  Distribution: healthy 3,586 / degraded 190 / prefail 160 / infail 56 /
+  postrepair 48 / invalid 20; zero empty. invalid = ~20 windows = the ~20.5h
+  Apr 20 fault at 1h resolution; only ~2 boundary windows are mixed-and-dropped.
 
 ## D21 — Spectral features: cycle-rhythm, not vibration
 - Fourier/FFT for VIBRATION or acoustic fault signatures is impossible on this

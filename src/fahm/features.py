@@ -52,18 +52,26 @@ def build_window_grid(df: pd.DataFrame, cfg: dict, window: str = "1h") -> pd.Dat
     return pd.DataFrame(rows)
 
 
-def label_grid(grid: pd.DataFrame, labels: pd.Series,
-               df: pd.DataFrame) -> pd.Series:
-    """Majority row-label per window; `invalid` wins ANY overlap (trust rule).
+def label_grid(grid: pd.DataFrame, labels: pd.Series, df: pd.DataFrame) -> pd.Series:
+    """One label per window: majority row-label, but `invalid` wins ANY
+    overlap (trust rule — one bad sample distrusts the whole window)."""
 
-    Hints:
-      * for each grid row: the labels of samples inside [start, end) —
-        mode() for majority, but check 'invalid' membership FIRST.
-      * vectorized route if the loop is slow: labels.groupby(a window id
-        computed via searchsorted / floor-div on TIMESTAMP).
-    """
-    raise NotImplementedError
+    ts = df[TIMESTAMP]
+    out = []
+    for _, w in grid.iterrows():
+        mask = (ts >= w["window_start"]) & (ts < w["window_end"])
+        win_labels = labels[mask]
 
+        if len(win_labels) == 0:
+            out.append("empty")                 # shouldn't happen (D20), but be safe
+            continue
+
+        if (win_labels == "invalid").any():
+            out.append("invalid")
+        else:
+            out.append(win_labels.mode()[0])
+
+    return pd.Series(out, index=grid.index, name="label")
 
 # ---------------------------------------------------------------------------
 # 2. Feature families — each returns a DataFrame indexed like `grid`
