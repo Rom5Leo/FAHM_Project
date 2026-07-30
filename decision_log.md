@@ -227,17 +227,17 @@
 - The `degraded` label stays; its ROLE changes from excluded to evaluated.
 
 ## D20 — Feature grid design
-- **Window size:** <1h?> — fine enough to resolve 48h-precursor dynamics,
-  coarse enough that 175 days ≈ <N> windows. Rationale: <yours>.
-- **Gap rule:** windows are built WITHIN contiguous segments only (segment id
-  = (diffs > gap_threshold).cumsum()); no window bridges a recording gap.
-  Partial final window per segment: <kept / dropped> because <reason>.
-- **Look-back scales** for rolling/dynamics features: <6h / 24h / 168h?> —
-  multi-scale because stage 3 showed precursors at different horizons
-  (F4 at 48h, F3 possibly only longer).
-- **Window label:** majority row-label, EXCEPT `invalid` wins any overlap
-  (trust rule — one bad sample distrusts the window).
-- Grid size after gap losses: <N> windows, label distribution <...>.
+- Window = 1h; result: 4,060 windows across 332 segments (= 331 gaps + 1).
+- Gap-aware by construction (segment_id = (diff>thr).cumsum()); no window
+  bridges a gap.
+- Windows are 1h FROM EACH SEGMENT'S START, not clock-aligned — a consequence
+  of the gap-aware design; boundaries don't match across segments.
+- Partial trailing window per segment dropped (edges[:-1]/[1:]).
+- Thin-window rule: none needed. All 4,060 windows are densely populated
+  (min 297, median 363 samples; 0 windows < 60 samples) — the gap-aware
+  segmentation excludes sparse regions before windowing, so no window is
+  under-sampled. n_samples kept as a column for downstream trust weighting.
+- Look-back scales for rolling features: TBD when those families are built.
 
 ## D21 — Spectral features: cycle-rhythm, not vibration
 - Fourier/FFT for VIBRATION or acoustic fault signatures is impossible on this

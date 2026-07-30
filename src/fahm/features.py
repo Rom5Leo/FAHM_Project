@@ -30,21 +30,26 @@ from fahm.preprocessing import ANALOG, DIGITAL, TIMESTAMP
 # 1. The grid
 # ---------------------------------------------------------------------------
 
-def build_window_grid(df: pd.DataFrame, cfg: dict,
-                      window: str = "1h") -> pd.DataFrame:
+def build_window_grid(df: pd.DataFrame, cfg: dict, window: str = "1h") -> pd.DataFrame:
     """The feature grid: window_start | window_end | segment_id.
+    Windows never bridge a recording gap (they live inside segments)."""
+    thr = pd.Timedelta(seconds=cfg["preprocessing"]["gap_threshold_seconds"])
+    ts = df[TIMESTAMP]
 
-    Hints:
-      * segments: a new segment starts wherever diff(TIMESTAMP) exceeds the
-        gap threshold (you computed exactly this in find_gaps) —
-        (diffs > thr).cumsum() is a one-line segment id per ROW.
-      * within each segment, windows = pd.date_range(seg_start, seg_end,
-        freq=window); drop the last partial window or keep it — DECIDE + log.
-      * a window belongs to exactly one segment by construction -> no window
-        bridges a gap. That's the whole point of the grid.
-      * expect ~4,200 rows at 1h over 175 days minus gap losses.
-    """
-    raise NotImplementedError
+    gap_row = ts.diff() > thr
+    segment_id = gap_row.cumsum()        # 0,0,0,1,1,2,... one id per contiguous run
+
+    # --- windows within each segment ---------------------------------------
+    rows = []
+    for seg, idx in df.groupby(segment_id).groups.items():
+        seg_ts = ts.loc[idx]
+        seg_start, seg_end = seg_ts.min(), seg_ts.max()
+
+        edges = pd.date_range(seg_start, seg_end, freq=window)
+        for w_lo, w_hi in zip(edges[:-1], edges[1:]):
+            rows.append({"window_start": w_lo, "window_end": w_hi, "segment_id": seg})   
+
+    return pd.DataFrame(rows)
 
 
 def label_grid(grid: pd.DataFrame, labels: pd.Series,
