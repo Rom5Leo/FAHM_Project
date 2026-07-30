@@ -251,6 +251,16 @@
 - Method: Lomb-Scargle periodogram (handles irregular sampling — jitter+gaps
   break a plain FFT), cross-checked with duty autocorrelation. F3's long shot
   (OQ5): it moved no central-tendency stat, but might show as a rhythm change.
+
+### D22 — Calendar/seasonality family (with a detrend purpose)
+- A metro APU's load has daily (rush hour) and weekly rhythm — operation, not
+  degradation. Calendar features serve two roles: cyclic hour/day-of-week
+  encodings, and (the important one) a per-hour healthy baseline to express
+  duty as a residual, separating real leaks from normal peak load.
+- Gate: verify duty actually shows hour/day seasonality before adding the
+  family; if flat, log that calendar time is irrelevant here and drop it —
+  don't encode a rhythm the data lacks.
+
 ---
 
 # Open Questions
@@ -373,7 +383,7 @@
 - Bonus: the "bug" was the config's flagged source oddity resurfacing —
   the paper trail worked in reverse (yaml comment -> visual anomaly).
 
-  ### L06 — A proximity claim without a base rate is unfalsifiable (OQ2)
+### L06 — A proximity claim without a base rate is unfalsifiable (OQ2)
 - Exhibit A was vivid: F3's 1,288-min gap starts 11 minutes before its
   failure window ends and recording resumes hours before the logged
   maintenance. It suggested a general rule — "recording stops around
@@ -390,7 +400,7 @@
   error, different disguise: here the assumption was that co-occurrence is
   evidence.
 
-  ### L07 — Passing tests are not correctness
+### L07 — Passing tests are not correctness
 - find_state_episodes passed five synthetic edge-case tests, then produced
   a reversed episode on real data: overlapping refinement brackets allowed
   non-monotonic flip times. My tests modeled clean single transitions;T
@@ -450,7 +460,7 @@
 - Habit: check completeness explicitly before concluding a failure is
   undetectable; scope choices are defaults to revisit, not conclusions.
 
-  ### L12 — Match the transform to what the data can resolve
+### L12 — Match the transform to what the data can resolve
 - "Signal analysis → Fourier" is a reflex; the discipline is asking what
   frequencies survive the sampling. Vibration spectra need kHz; a 10s grid
   supports only sub-0.05 Hz phenomena. The right spectral target here is the
@@ -458,7 +468,16 @@
   sampling is uneven. Same family as L02/L04: transform assumptions vs data
   reality.
 
-
+### L13 — Build features one family at a time, inspecting each before the next
+- Interleave construction and inspection: build a feature family, sanity-check
+  its new columns (describe + distribution glance) immediately, THEN build the
+  next. A degenerate family (all-NaN, wrong scale, constant) is caught at
+  once, not buried among dozens of columns later.
+- Keep this workflow discipline separate from state mechanics: do NOT chain
+  mutating copies (df→df2→df3...) — that couples cells to run-order and
+  corrupts silently on re-run. Families are pure functions returning columns
+  concatenated onto one grid; the ordering discipline is about WHEN you look,
+  not about mutating shared state.
 
 
 
