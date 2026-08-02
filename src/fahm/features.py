@@ -94,34 +94,36 @@ def duty_state_features(df: pd.DataFrame, grid: pd.DataFrame, cfg: dict) -> pd.D
         })
     return pd.DataFrame(rows, index=grid.index)
 
-def _feat_effect_by_failure(feats, grid, grid_labels, fw, cols, hours=48):
-    ref = feats[grid_labels == "healthy"]
-    out = {}
-    for _, f in fw.iterrows():
-        pre_mask = ((grid["window_start"] >= f["start"] - pd.Timedelta(hours=hours))
-                    & (grid["window_start"] < f["start"]))
-        pre = feats[pre_mask]
-        out[f["failure_id"]] = {
-            c: (round((pre[c].median() - ref[c].median()) /
-                      (ref[c].quantile(.75) - ref[c].quantile(.25)), 2)
-                if (ref[c].quantile(.75) - ref[c].quantile(.25)) else float("nan"))
-            for c in cols}
-    return pd.DataFrame(out).T
-
-feat_cols = ["duty", "frac_off", "frac_offloaded", "frac_loaded"]
-_feat_effect_by_failure(f_duty, grid, grid_labels, fw, feat_cols)
-
 
 def pressure_dynamics_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """TP3 idle-decay slope; build rate; cycles per hour.
+    """Per window: TP3 idle-decay slope (THE leak meter), cycles/hour.
 
-    Hints:
-      * idle-decay: within a window, take samples where the machine is idle
-        (COMP==1) and fit/first-difference TP3 vs time — bar/min. THE leak
-        meter. np.polyfit(t_seconds, tp3, 1)[0] on the idle mask is enough.
-      * cycles/hour: count DV_eletric rising edges ((s.diff()==1).sum()).
+    Idle-decay: when the compressor is OFF (COMP==0), reservoir pressure should
+    hold; a leak makes it fall. The slope of TP3 vs time during idle samples is
+    a near-direct leak measurement — steeper negative = worse leak.
     """
-    raise NotImplementedError
+    rows = []
+    for _, w in grid.iterrows():
+        seg = df[(df[TIMESTAMP] >= w["window_start"]) & (df[TIMESTAMP] < w["window_end"])]
+
+        # --- idle-decay slope of TP3 -----------------------------------------
+        is_idle = seg["COMP"] == 1
+        run_id = (is_idle != is_idle.shift()).cumsum()
+        slopes = []
+        for _, stretch in seg[is_idle].groupby(run_id[is_idle]):
+            if len(stretch) >= 5:
+                t = (stretch[TIMESTAMP] - stretch[TIMESTAMP].iloc[0]).dt.total_seconds()
+                slopes.append(np.polyfit(t, stretch["TP3"], 1)[0])
+        slope = np.median(slopes) if slopes else float("nan")
+
+        # --- cycling rate ----------------------------------------------------
+        rising_edges = (seg["DV_eletric"]== 1).sum()
+
+        rows.append({
+            "tp3_decay_slope": slope,          # bar/sec; negative = leaking
+            "cycles_per_hour": rising_edges,   # window is 1h, so count ≈ rate
+        })
+    return pd.DataFrame(rows, index=grid.index)
 
 
 def thermal_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:

@@ -288,6 +288,15 @@
   vs raw-sensor +0.136 / −0.078 — aggregation concentrates what per-sample
   metrics dilute.
 
+## D25 — COMP polarity is INVERTED (like the OQ1 digitals)
+- Measured: mean Motor_current when COMP==0 is 5.6 A (loaded) -> COMP==0 means
+  RUNNING, COMP==1 means IDLE. The docs' implicit "1=on" is wrong here, matching
+  the Pressure_switch/Oil_level inversions (OQ1/D16).
+- Fix: idle mask = COMP==1 everywhere. Corrects pressure_dynamics_features
+  (was fitting decay over LOADED samples -> spurious positive slopes).
+- Audit: duty uses DV_eletric (unaffected); antiphase_share is symmetric
+  (unaffected). D06's "loaded keys on COMP" amended: loaded = COMP==0.
+
 ---
 
 # Open Questions
@@ -513,6 +522,19 @@
   concatenated onto one grid; the ordering discipline is about WHEN you look,
   not about mutating shared state.
 
+### L14 — Assume nothing about digital polarity; verify against a physical anchor
+- Three signals now confirmed inverted vs their documented/assumed meaning
+  (Pressure_switch, Oil_level, COMP). The reflex "0=off, 1=on" is unreliable
+  in this dataset. Verify every digital's meaning against a physical anchor
+  (e.g. Motor_current level) before using it in a mask or feature.
 
-
-
+### L15 — Aggregate at the right granularity, or signal averages to zero
+- tp3_decay_slope fit ONE line across a whole 1h window — but a window holds
+  ~40 idle stretches separated by refills; the fit measured the sawtooth's
+  overall tilt (≈0), not the decay within each tooth. Effect sizes confirmed
+  it: −0.00 to −0.12, dead. Fix: fit each idle stretch separately, take the
+  median. The leak lives at per-stretch granularity; window-wide aggregation
+  destroyed it.
+- Caught by the per-family effect-size validation — a plausible-looking
+  feature (sensible histogram) that separated nothing. Validation, not
+  inspection, caught it.
