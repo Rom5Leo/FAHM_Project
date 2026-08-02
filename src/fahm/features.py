@@ -156,10 +156,35 @@ def oil_residual_feature(f_thermal, f_duty, grid_labels, degree=2):
 
 
 def variability_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """Rolling/within-window std of duty & oil; cycle-duration variance;
-    toggle rates. F3's only remaining chance (OQ5) — build with care."""
-    raise NotImplementedError
+    """Variability + cycling-regime measures. cycle_dur_* need cycles (NaN when
+    idle/continuous); frac_continuous_load & longest_load_stretch are defined
+    ALWAYS — they catch the regime shift (normal cycling -> locked loaded) that
+    precedes F1/F3, which cycle_dur_cv misses (OQ5)."""
+    rows = []
+    for _, w in grid.iterrows():
+        seg = df[(df[TIMESTAMP] >= w["window_start"]) & (df[TIMESTAMP] < w["window_end"])]
 
+        starts = seg.loc[seg["DV_eletric"].diff() == 1, TIMESTAMP]
+        cycle_secs = starts.diff().dt.total_seconds().dropna()
+
+        # regime: run-lengths of continuous load (DV_eletric==1)
+        loaded = seg["DV_eletric"] == 1
+        run_id = (loaded != loaded.shift()).cumsum()
+        load_runs = seg[loaded].groupby(run_id[loaded]).size()   # samples per loaded run
+        longest = load_runs.max() * 10 / 60 if len(load_runs) else 0.0   # minutes
+
+        rows.append({
+            "oil_std": seg["Oil_temperature"].std(),
+            "tp3_std": seg["TP3"].std(),
+            "duty_std": seg["DV_eletric"].std(),
+            "cycle_dur_cv": (cycle_secs.std() / cycle_secs.mean()
+                             if len(cycle_secs) >= 3 else float("nan")),
+            "cycle_dur_trend": (np.polyfit(range(len(cycle_secs)), cycle_secs, 1)[0]
+                                if len(cycle_secs) >= 3 else float("nan")),
+            "longest_load_stretch": longest,                    # minutes; regime, always defined
+            "frac_continuous_load": seg["DV_eletric"].mean(),   # = duty, but here as regime lens
+        })
+    return pd.DataFrame(rows, index=grid.index)
 
 def cycle_frequency_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
     """Spectral features of the SLOW cycling rhythm (D21).

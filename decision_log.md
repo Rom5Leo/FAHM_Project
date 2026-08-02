@@ -538,3 +538,9 @@
 - Caught by the per-family effect-size validation — a plausible-looking
   feature (sensible histogram) that separated nothing. Validation, not
   inspection, caught it.
+  
+### L16 — Build the feature, let the effect sizes assign it — don't assume which failure it catches
+- Predicted longest_load_stretch would catch F3 (lock-up hypothesis). It caught
+  F4 instead (+1.83); F3 was the OPPOSITE mechanism (short-cycling, caught by
+  cycle_dur_cv/trend). The feature was worth building — just not for the failure
+  predicted. Assign features to failures by measurement, not expectation.
