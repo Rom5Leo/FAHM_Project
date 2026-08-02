@@ -265,6 +265,19 @@
   family; if flat, log that calendar time is irrelevant here and drop it —
   don't encode a rhythm the data lacks.
 
+## D23 — Detection framing, with forecasting as a residual signal (not pure forecasting)
+- Problem shape dictates paradigm: 4 failures in 7 months + partial labels +
+  "investigate this machine" framing → anomaly/DEGRADATION DETECTION (learn
+  healthy, measure distance), NOT trajectory forecasting (can't learn failure
+  dynamics from n=4).
+- BUT forecasting enters as a tool: a healthy-trained forecaster whose
+  RESIDUAL (predicted vs actual) becomes an anomaly score — flags "the machine
+  stopped being predictable" before any value crosses a threshold. A candidate
+  second model family alongside the feature-based detector; possibly F3's only
+  chance (OQ5), since a level-sudden failure may be preceded by rising
+  unpredictability.
+- Plan: build both, compare per-failure on detection lead-time.
+
 ---
 
 # Open Questions
@@ -320,6 +333,16 @@
 - If still silent: F3 is a genuinely sudden failure. Stating that honestly is
   a finding, not a gap.
 
+### OQ6 (resolved, partially) — day-of-week duty
+- Original Wed/Sat/Sun elevation was PART confound: Saturday's high duty was
+  the degraded/failure periods leaking in (healthy-only: 0.191 → 0.116 — an
+  OQ3 fingerprint). But Wed (0.188) and Sun (0.168) stay elevated on
+  HEALTHY-only data vs ~0.13 baseline — a real ~0.05 effect, cause unknown
+  (scheduled ops on those days?).
+- Consequence: minor. Healthy duty has a small day-of-week baseline
+  (~0.13–0.19). Too small to justify calendar features (failure signals are
+  10-40x larger), but noted as a residual baseline a duty anomaly score could
+  in principle correct for. calendar_features stays DROPPED.
 ---
 
 # Lessons

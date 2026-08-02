@@ -77,29 +77,6 @@ def label_grid(grid: pd.DataFrame, labels: pd.Series, df: pd.DataFrame) -> pd.Se
 # 2. Feature families — each returns a DataFrame indexed like `grid`
 # ---------------------------------------------------------------------------
 
-def calendar_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """Time-of-day / day-of-week context (D22).
-
-    A metro APU works harder at rush hour and on weekdays, so raw duty/oil
-    carry a daily+weekly rhythm that is OPERATION, not degradation. Two uses:
-      * as features: hour-of-day, day-of-week of each window (cyclically
-        encoded — sin/cos of hour so 23:00 and 00:00 are neighbours, not
-        extremes).
-      * as DETREND context (the important one): "is duty high FOR THIS HOUR?"
-        separates a real leak from normal rush-hour load. Consider computing
-        the per-hour healthy baseline and expressing duty as a residual.
-
-    Hints:
-      * window mid-time -> .dt.hour, .dt.dayofweek.
-      * sin/cos encode: np.sin(2*np.pi*hour/24), np.cos(...). Same for dow/7.
-      * BEFORE trusting this family, verify duty actually has daily/weekly
-        seasonality (groupby hour -> mean duty); if flat, log that calendar
-        time is irrelevant here and drop the family. Don't add features that
-        encode a rhythm the data doesn't have.
-    """
-    raise NotImplementedError
-
-
 def duty_state_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
     """duty; fraction of time per Motor_current mode (off / offloaded / loaded).
 
