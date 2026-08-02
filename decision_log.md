@@ -262,8 +262,8 @@
   encodings, and (the important one) a per-hour healthy baseline to express
   duty as a residual, separating real leaks from normal peak load.
 - Gate: verify duty actually shows hour/day seasonality before adding the
-  family; if flat, log that calendar time is irrelevant here and drop it —
-  don't encode a rhythm the data lacks.
+  family.
+- Decision: Calendar Features Dropped.
 
 ## D23 — Detection framing, with forecasting as a residual signal (not pure forecasting)
 - Problem shape dictates paradigm: 4 failures in 7 months + partial labels +
@@ -277,6 +277,16 @@
   chance (OQ5), since a level-sudden failure may be preceded by rising
   unpredictability.
 - Plan: build both, compare per-failure on detection lead-time.
+
+## D24 — Feature validation via window-level per-failure effect sizes
+- feature_effect_by_failure (analysis.py): the window-level sibling of
+  prefail_effect_by_failure (which works on raw rows). Compares each failure's
+  prefail-WINDOW feature values to healthy-window values, robust effect
+  (median shift / IQR). Run after every feature family — a family that doesn't
+  separate any failure doesn't earn its columns.
+- Confirmed the approach adds signal: windowed duty gave F4 +3.46 / F1 −0.64
+  vs raw-sensor +0.136 / −0.078 — aggregation concentrates what per-sample
+  metrics dilute.
 
 ---
 
@@ -333,16 +343,13 @@
 - If still silent: F3 is a genuinely sudden failure. Stating that honestly is
   a finding, not a gap.
 
-### OQ6 (resolved, partially) — day-of-week duty
-- Original Wed/Sat/Sun elevation was PART confound: Saturday's high duty was
-  the degraded/failure periods leaking in (healthy-only: 0.191 → 0.116 — an
-  OQ3 fingerprint). But Wed (0.188) and Sun (0.168) stay elevated on
-  HEALTHY-only data vs ~0.13 baseline — a real ~0.05 effect, cause unknown
-  (scheduled ops on those days?).
-- Consequence: minor. Healthy duty has a small day-of-week baseline
-  (~0.13–0.19). Too small to justify calendar features (failure signals are
-  10-40x larger), but noted as a residual baseline a duty anomaly score could
-  in principle correct for. calendar_features stays DROPPED.
+### OQ6 — Irregular day-of-week duty elevation
+- Wed/Sat/Sun show ~0.19 duty vs ~0.14 other days (35% higher), not a
+  weekly rhythm. Candidate causes: scheduled operations/tests on those days,
+  or the failure/degraded periods happening to fall on them (Apr 18-30 degraded
+  span would weight certain weekdays). Check: recompute day-of-week duty on
+  HEALTHY-only rows — if the elevation vanishes, it's the degraded/failure
+  periods leaking in, not a real weekly effect.
 ---
 
 # Lessons

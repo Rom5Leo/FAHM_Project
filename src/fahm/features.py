@@ -77,17 +77,39 @@ def label_grid(grid: pd.DataFrame, labels: pd.Series, df: pd.DataFrame) -> pd.Se
 # 2. Feature families — each returns a DataFrame indexed like `grid`
 # ---------------------------------------------------------------------------
 
-def duty_state_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """duty; fraction of time per Motor_current mode (off / offloaded / loaded).
+def duty_state_features(df: pd.DataFrame, grid: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Per window: duty (valve-based load fraction) + fraction of time in each
+    Motor_current mode (off / offloaded / loaded). Catches F4-up, F1-down (6.4)."""
+    m = cfg["features"]["motor_modes"]
+    rows = []
+    for _, w in grid.iterrows():
+        seg = df[(df[TIMESTAMP] >= w["window_start"]) & (df[TIMESTAMP] < w["window_end"])]
+        mc = seg["Motor_current"]
 
-    Hints:
-      * mode thresholds from D06: off < 1 A; offloaded ~3.9 (1-4.75?);
-        loaded > ~4.75. Put the cut points in cfg, not here — they are
-        MEASURED quantities (step-3 histograms), so they belong in config.
-      * loaded-state truth keys on COMP/DV_eletric (D06) — consider BOTH a
-        current-based and a valve-based occupancy and let stage-5 pick.
-    """
-    raise NotImplementedError
+        rows.append({
+            "duty": seg["DV_eletric"].mean(),
+            "frac_off": (mc < m["off_max"]).mean(),
+            "frac_offloaded": ((mc >= m["off_max"]) & (mc < m["offloaded_max"])).mean(),
+            "frac_loaded": (mc >= m["offloaded_max"]).mean(),
+        })
+    return pd.DataFrame(rows, index=grid.index)
+
+def _feat_effect_by_failure(feats, grid, grid_labels, fw, cols, hours=48):
+    ref = feats[grid_labels == "healthy"]
+    out = {}
+    for _, f in fw.iterrows():
+        pre_mask = ((grid["window_start"] >= f["start"] - pd.Timedelta(hours=hours))
+                    & (grid["window_start"] < f["start"]))
+        pre = feats[pre_mask]
+        out[f["failure_id"]] = {
+            c: (round((pre[c].median() - ref[c].median()) /
+                      (ref[c].quantile(.75) - ref[c].quantile(.25)), 2)
+                if (ref[c].quantile(.75) - ref[c].quantile(.25)) else float("nan"))
+            for c in cols}
+    return pd.DataFrame(out).T
+
+feat_cols = ["duty", "frac_off", "frac_offloaded", "frac_loaded"]
+_feat_effect_by_failure(f_duty, grid, grid_labels, fw, feat_cols)
 
 
 def pressure_dynamics_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
@@ -156,8 +178,7 @@ def instrument_health_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataF
 # 3. Assembly + artifact
 # ---------------------------------------------------------------------------
 
-FAMILIES = [calendar_features,
-            duty_state_features, pressure_dynamics_features,
+FAMILIES = [duty_state_features, pressure_dynamics_features,
             thermal_features, variability_features,
             cycle_frequency_features,        # D21: spectral cycle-rhythm
             instrument_health_features]

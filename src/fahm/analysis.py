@@ -349,3 +349,16 @@ def prefail_effect_by_failure(df, fw, features, labels, hours=48):
         out[f["failure_id"]] = es["effect"]
     return pd.DataFrame(out).T
 
+def feature_effect_by_failure(feats, grid, grid_labels, fw, cols, hours=48):
+    ref = feats[grid_labels == "healthy"]
+    out = {}
+    for _, f in fw.iterrows():
+        pre_mask = ((grid["window_start"] >= f["start"] - pd.Timedelta(hours=hours))
+                    & (grid["window_start"] < f["start"]))
+        pre = feats[pre_mask]
+        out[f["failure_id"]] = {
+            c: (round((pre[c].median() - ref[c].median()) /
+                      (ref[c].quantile(.75) - ref[c].quantile(.25)), 2)
+                if (ref[c].quantile(.75) - ref[c].quantile(.25)) else float("nan"))
+            for c in cols}
+    return pd.DataFrame(out).T

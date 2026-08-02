@@ -38,3 +38,8 @@ failure_windows:
   - {failure_id: F2, fault_type: air_leak, start: 2020-05-29 23:30, end: 2020-05-30 06:00, maintenance: 2020-04-30 12:00}
   - {failure_id: F3, fault_type: air_leak, start: 2020-06-05 10:00, end: 2020-06-07 14:30, maintenance: 2020-06-08 16:00}
   - {failure_id: F4, fault_type: air_leak, start: 2020-07-15 14:30, end: 2020-07-15 19:00, maintenance: 2020-07-16 00:00}
+
+features:
+  motor_modes:            # Motor_current [A] cut points, from step-3 histograms (D06)
+    off_max: 1.0          # < 1 A = motor off
+    offloaded_max: 4.75   # 1-4.75 A = offloaded running (~3.9 mode) > 4.75 A = loaded (~5.5-6 mode)
