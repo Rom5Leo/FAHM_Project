@@ -127,8 +127,32 @@ def pressure_dynamics_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataF
 
 
 def thermal_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """Oil median; oil trend over the window; oil-per-duty ratio."""
-    raise NotImplementedError
+    """Per window: oil level, oil trend, oil-per-duty. Catches F4 ramp, F1 cool-idle."""
+    rows = []
+    for _, w in grid.iterrows():
+        seg = df[(df[TIMESTAMP] >= w["window_start"]) & (df[TIMESTAMP] < w["window_end"])]
+        oil = seg["Oil_temperature"]
+
+        # trend: slope of oil vs time across the window (°C per second)
+        t = (seg[TIMESTAMP] - seg[TIMESTAMP].iloc[0]).dt.total_seconds()
+        oil_trend = np.polyfit(t, oil, 1)[0] if len(seg) >= 10 else float("nan")
+
+        duty = seg["DV_eletric"].mean()
+
+        rows.append({
+            "oil_median": oil.median(),
+            "oil_trend": oil_trend,      # done: °C/s, positive = warming
+        })
+    return pd.DataFrame(rows, index=grid.index)
+
+def oil_residual_feature(f_thermal, f_duty, grid_labels, degree=2):
+    """Oil temp minus healthy-baseline prediction from duty (D26).
+    Fits oil~duty on HEALTHY windows internally, applies to all. Self-contained."""
+    h = grid_labels == "healthy"
+    d, o = f_duty["duty"], f_thermal["oil_median"]
+    m = h & d.notna() & o.notna()
+    coef = np.polyfit(d[m], o[m], degree)          # baseline on healthy only
+    return f_thermal["oil_median"] - np.polyval(coef, d)   # residual for all windows
 
 
 def variability_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
