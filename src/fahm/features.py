@@ -187,42 +187,49 @@ def variability_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, index=grid.index)
 
 def cycle_frequency_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """Spectral features of the SLOW cycling rhythm (D21).
+    """Spectral features of the slow cycling rhythm via Lomb-Scargle (D21).
+    Not vibration (decimation killed that, L02) — the minutes-scale load cycle.
+    Shares the 'needs cycles' limit: NaN when idle/locked."""
+    from astropy.timeseries import LombScargle
+    rows = []
+    for _, w in grid.iterrows():
+        seg = df[(df[TIMESTAMP] >= w["window_start"]) & (df[TIMESTAMP] < w["window_end"])]
 
-    Fourier for VIBRATION is impossible here — decimation to 10s caps Nyquist
-    at ~1/20 Hz, so bearing/valve signatures (Hz-kHz) are gone (L02). BUT the
-    load/unload cycle has a period of MINUTES, well within 10s resolution, and
-    a leak makes the machine cycle FASTER to compensate — so the dominant
-    cycling frequency and its drift are legitimate, physically-motivated
-    features, and F3's kind of long shot (it moved no central-tendency stat).
+        t = (seg[TIMESTAMP] - seg[TIMESTAMP].iloc[0]).dt.total_seconds().values
+        y = seg["DV_eletric"].values.astype(float)
 
-    Hints:
-      * sampling is IRREGULAR (jitter + gaps) -> a plain FFT assumes uniform
-        spacing and will lie. Use Lomb-Scargle (astropy.timeseries.
-        LombScargle) — the standard periodogram for uneven time series — on
-        the duty or TP3 signal within each window.
-      * features per window: dominant cycle frequency (peak of the
-        periodogram), its power, and spectral entropy (rhythm regular vs
-        erratic). A leak should raise the fundamental and/or scatter the
-        spectrum.
-      * cheaper robust alternative / cross-check: autocorrelation of the duty
-        signal -> first-peak lag = cycle period; track its drift. Same physics,
-        no spectral-leakage fuss. Build ONE first, add the other if it earns
-        its columns (effect-size check, §3).
-      * windows are short (1h) with a minutes-scale cycle -> only a handful of
-        cycles per window. Verify the periodogram is meaningful at this length
-        BEFORE trusting it; may need a longer look-back window for this family.
-    """
-    raise NotImplementedError
+        # need enough variation to have a spectrum (not all-0/all-1, enough points)
+        if len(y) < 30 or y.std() == 0:
+            rows.append({"dominant_freq": float("nan"),
+                         "spectral_entropy": float("nan")})
+            continue
+
+        freq = np.linspace(1/3600, 1/60, 200)     # periods 1h down to 1min
+        power = LombScargle(t, y).power(freq)
+
+        dominant = dominant = freq[np.argmax(power)]
+        p = power / power.sum()
+        entropy = -np.sum(p * np.log(p + 1e-12))     # +tiny to avoid log(0)
+
+        rows.append({"dominant_freq": dominant, "spectral_entropy": entropy})
+    return pd.DataFrame(rows, index=grid.index)
 
 
 def instrument_health_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
-    """antiphase share; stuck-analog flags (within-window variance ~ 0).
+    """Per window: is the INSTRUMENT trustworthy? (separate axis from machine
+    health — stage 3 design). Should fire on the Apr 20 fault, quiet elsewhere.
+    Stage 5 trains machine-health only on instrument-clean windows."""
+    from fahm.analysis import antiphase_share
+    rows = []
+    for _, w in grid.iterrows():
+        seg = df[(df[TIMESTAMP] >= w["window_start"]) & (df[TIMESTAMP] < w["window_end"])]
 
-    Separate axis from machine health (stage-3 design): stage 5 trains only
-    on windows that are BOTH healthy-labeled AND instrument-clean.
-    """
-    raise NotImplementedError
+        rows.append({
+            "antiphase_share": antiphase_share(df, w["window_start"], w["window_end"]),
+            "motor_frozen": (seg["Motor_current"].var() < 1e-6),
+            "tp3_frozen": (seg["TP3"].var() < 1e-6),
+        })
+    return pd.DataFrame(rows, index=grid.index)
 
 
 # ---------------------------------------------------------------------------
@@ -230,23 +237,83 @@ def instrument_health_features(df: pd.DataFrame, grid: pd.DataFrame) -> pd.DataF
 # ---------------------------------------------------------------------------
 
 FAMILIES = [duty_state_features, pressure_dynamics_features,
-            thermal_features, variability_features,
-            cycle_frequency_features,        # D21: spectral cycle-rhythm
+            thermal_features, variability_features,        # D21: spectral cycle-rhythm
             instrument_health_features]
 
 
-def build_features(df: pd.DataFrame, grid: pd.DataFrame,
-                   cfg: dict) -> pd.DataFrame:
-    """Run every family, concat columns onto the grid, return the table.
+def build_features(df, grid, cfg, grid_labels):
+    parts = [grid.reset_index(drop=True)]
+    for fam in FAMILIES:
+        try:    out = fam(df, grid, cfg)
+        except TypeError:  out = fam(df, grid)
+        parts.append(out.reset_index(drop=True))
+    feats = pd.concat(parts, axis=1)
 
-    Hint: pd.concat([grid] + [fam(df, grid) for fam in FAMILIES], axis=1);
-    verify no duplicate column names and no all-NaN columns before returning
-    (a family that silently returns NaNs is a bug, not a feature).
+    feats["oil_residual"] = oil_residual_feature(feats, feats, grid_labels)  # uses feats["oil_median"], feats["duty"]
+
+    dupes = feats.columns[feats.columns.duplicated()].tolist()
+    if dupes: raise ValueError(f"duplicate columns: {dupes}")
+    all_nan = [c for c in feats.columns if feats[c].isna().all()]
+    if all_nan: raise ValueError(f"all-NaN columns: {all_nan}")
+    return feats
+
+def add_cycling_regime(feats: pd.DataFrame) -> pd.DataFrame:
+    """D29 partial-3: an explicit regime column so the cycle-features' NaN
+    pattern (idle / cycling / locked) becomes a usable categorical signal.
+    Uses duty + cycles_per_hour, both always defined."""
+    out = feats.copy()
+    duty = out["duty"]
+    cyc = out["cycles_per_hour"]
+    regime = pd.Series("cycling", index=out.index)      # default
+    regime[duty < 0.05] = "idle"                        # barely running
+    regime[(duty > 0.8) | (cyc < 3)] = "locked"         # continuous load / no cycles
+    out["cycling_regime"] = regime
+    return out
+
+
+def prepare_for_model(feats: pd.DataFrame, labels: pd.Series,
+                      nan_features: list[str] | None = None,
+                      exclude: tuple = ("window_start", "window_end",
+                                        "segment_id", "n_samples")) -> pd.DataFrame:
+    """Model-ready table (D29): missing-indicators + neutral fill for
+    informative NaNs, then standardize continuous features on HEALTHY windows.
+
+    Booleans/flags and the regime category are left unscaled.
+    Fit the scaler on healthy only so 'normal' defines the scale and anomalies
+    read as large deviations.
     """
-    raise NotImplementedError
+    out = feats.copy()
 
+    # 1) missing indicators + neutral fill for the NaN-prone (cycle) features
+    if nan_features is None:
+        nan_features = [c for c in out.columns
+                        if out[c].dtype.kind == "f" and out[c].isna().any()]
+    for c in nan_features:
+        out[f"{c}_missing"] = out[c].isna().astype(int)     # 1 = was not measurable
+        fill = out.loc[labels == "healthy", c].median()     # neutral = healthy median
+        out[c] = out[c].fillna(fill)
+
+    # 2) standardize continuous features on HEALTHY only
+    #    (skip: bookkeeping cols, booleans, the *_missing flags, the regime cat)
+    skip = set(exclude) | {c for c in out.columns if c.endswith("_missing")}
+    cont = [c for c in out.columns
+            if c not in skip
+            and out[c].dtype.kind in "fi"
+            and out[c].nunique() > 2]                        # >2 values = continuous
+    h = labels == "healthy"
+    mu = out.loc[h, cont].mean()
+    sd = out.loc[h, cont].std().replace(0, 1.0)             # guard zero-variance
+    out[cont] = (out[cont] - mu) / sd                       # z-score vs healthy
+
+    out["label"] = labels.values
+    return out
 
 def save_features(feats: pd.DataFrame, cfg: dict) -> Path:
-    """Persist to cfg['paths']['features'] (parquet, D11 convention).
-    Add the path to config first — full filename, not a directory."""
-    raise NotImplementedError
+    """Persist the model-ready feature table to cfg['paths']['features']
+    (parquet, D11 convention)."""
+    out = Path(cfg["paths"]["features"])
+    if out.suffix != ".parquet":
+        raise ValueError(f"cfg paths.features should be a .parquet file, got {out!r}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    feats.to_parquet(out, index=False)
+    return out

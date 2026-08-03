@@ -297,6 +297,45 @@
 - Audit: duty uses DV_eletric (unaffected); antiphase_share is symmetric
   (unaffected). D06's "loaded keys on COMP" amended: loaded = COMP==0.
 
+## D26 — Thermal residual via healthy oil-vs-duty baseline
+- Problem: raw oil_median conflates "hot because working hard" with "hot
+  because faulty." The first attempt (oil_per_duty ratio) failed — a ratio
+  responds to numerator AND denominator (F4's ratio DROPPED because duty rose
+  faster than oil) and blew up at small duty.
+- Choice: fit oil ~ f(duty) on HEALTHY windows only (degree-2, the scatter
+  shows a clear rising-then-plateau curve); oil_residual = observed oil minus
+  what the healthy curve predicts at that window's duty. Positive = hotter than
+  the workload explains = leak signature, independent of workload level.
+- Result: F1 −1.23, F2 +0.64 (genuine thermal anomalies); F4 ≈0 (its heat is
+  fully workload-explained — correct null). Residual is the right tool for
+  "more/less than context predicts"; same pattern as forecast-residual
+  detection (D23).
+  
+## D27 — Multi-scale look-back (reserved for cycle features)
+- Grid stays at 1h (max rows 4,060, clean gap handling). Cycle/variability
+  features suffer NaN when a 1h window has too few cycles. Planned refinement:
+  compute cycle features over a longer look-back (e.g. 6h preceding each 1h
+  window) to raise coverage without losing rows. Not yet implemented; noted as
+  the principled fix for cycle-feature sparsity.
+
+## D28 — Spectral (cycle_frequency) family: analyzed, excluded from model set
+- Lomb-Scargle dominant_freq + spectral_entropy corroborate F4 (faster, more
+  regular rhythm) but are SILENT on F3 (−0.17/−0.10) — the failure they were
+  meant to help. Everything they catch is already caught more cheaply. Kept in
+  the notebook as analysis (demonstrates the spectral angle was tested); removed
+  from FAMILIES so the model set carries no astropy-dependent dead weight.
+- Calendar (D22) likewise excluded (no seasonality). Removing a non-earning
+  feature is a deliberate decision, logged like any other.
+
+## D29 — NaN handling: informative-missingness, not imputation
+- Cycle/variability features are NaN in idle/locked windows — MEANINGFUL
+  absence (the regime itself), not random missingness. Naive fill would lie.
+- Strategy: for each NaN-prone feature, add a boolean *_missing indicator, then
+  fill the value neutrally (median). Model sees both value and measurability;
+  the missingness (idle/locked) becomes usable signal (it carried F3's regime).
+- Rescaling: standardize continuous features on HEALTHY windows only (fit
+  scaler on healthy, apply to all) — so "normal" defines the scale and
+  anomalies read as large deviations. Booleans/flags left unscaled.
 ---
 
 # Open Questions

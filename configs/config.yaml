@@ -6,6 +6,7 @@ paths:
   processed: data/processed/sensor_readings.parquet   # D11
   failure_windows: data/processed/failure_windows.csv
   figures: docs/figures/
+  features: data/processed/features.parquet   # D11 convention
 
 preprocessing:
   expected_interval_seconds: 10   # modal interval, measured: 1,337,521 of ~1.5M steps (step 2)
@@ -43,3 +44,5 @@ features:
   motor_modes:            # Motor_current [A] cut points, from step-3 histograms (D06)
     off_max: 1.0          # < 1 A = motor off
     offloaded_max: 4.75   # 1-4.75 A = offloaded running (~3.9 mode) > 4.75 A = loaded (~5.5-6 mode)
+
+
