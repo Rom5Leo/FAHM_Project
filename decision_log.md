@@ -310,7 +310,7 @@
   fully workload-explained — correct null). Residual is the right tool for
   "more/less than context predicts"; same pattern as forecast-residual
   detection (D23).
-  
+
 ## D27 — Multi-scale look-back (reserved for cycle features)
 - Grid stays at 1h (max rows 4,060, clean gap handling). Cycle/variability
   features suffer NaN when a 1h window has too few cycles. Planned refinement:
@@ -336,6 +336,32 @@
 - Rescaling: standardize continuous features on HEALTHY windows only (fit
   scaler on healthy, apply to all) — so "normal" defines the scale and
   anomalies read as large deviations. Booleans/flags left unscaled.
+
+## D30 — Anomaly-detection results: zmax baseline wins
+- Three detectors (zmax = max|z| across healthy-scaled features; IsolationForest;
+  Mahalanobis), fit on early-healthy, evaluated per-failure vs val-healthy on a
+  TIME-ORDERED split (no shuffling — autocorrelated windows would leak).
+- zmax wins every target: F1 AUC 0.864 (32.5h lead), F4 0.795 (8h), F3 0.702
+  (9.6h), F2 0.635 (0h), degraded 0.575. IForest/Mahalanobis lower everywhere;
+  both score the degraded span BELOW chance (0.25/0.30).
+- Why the trivial baseline wins: stage-4 features are strong and healthy-scaled,
+  so failures present as one/few extreme features — exactly what max|z| catches.
+  The multivariate methods hunt subtle joint patterns that aren't the signal
+  here. Verified zmax is genuinely multivariate: the argmax feature varies by
+  failure (F4 trips tp3_decay_slope, others differ), not one dominant feature.
+
+## D31 — Two detectors are complementary: anomaly (unique failures) + supervised (shared-pattern failures)
+- Leave-one-failure-out (train on 3 failures, test on held-out 4th): F3
+  learnable from others (0.80), F4 NOT (0.48-0.69, near chance), F1/F2 ~chance.
+- Inverts anomaly-detection difficulty: F4 is easiest-as-anomaly (unique ->
+  deviates most from healthy) but hardest-to-learn-from-others (unique -> unseen
+  pattern); F3 is hardest-as-anomaly but easiest-to-transfer (shared pattern).
+- No supervised model beats zmax as a detector (handicapped on unique failures).
+  zmax stays primary; supervised reveals failure TAXONOMY, not better detection.
+- Consequence: a deployed system benefits from both — anomaly scoring for novel
+  failures, supervised for recurring known-pattern failures.
+
+
 ---
 
 # Open Questions
@@ -583,3 +609,22 @@
   F4 instead (+1.83); F3 was the OPPOSITE mechanism (short-cycling, caught by
   cycle_dur_cv/trend). The feature was worth building — just not for the failure
   predicted. Assign features to failures by measurement, not expectation.
+
+### L17 — Always run the trivial baseline; it may win
+- A 3-line max|z| detector beat IsolationForest and Mahalanobis on every
+  failure. Reaching straight for the sophisticated model would have produced a
+  worse, less interpretable result. The baseline wins when features already
+  encode the signal well — check before adding complexity.
+
+### L18 — Mahalanobis with shrinkage covariance
+
+The raw sample covariance is singular here (condition number ~1e21): the
+occupancy fractions sum to 1, the one-hot regime dummies sum to 1, and the
+_missing flags correlate with their features — structural collinearity that no
+single column-drop cures. `pinv` doesn't error on a singular matrix, it returns
+garbage, which inverted the score (healthy ranked above failures).
+
+Fix: Ledoit-Wolf shrinkage — analytically shrinks the covariance toward a
+well-conditioned target, giving an invertible estimate that keeps all features.
+This is the correct tool for the "collinear / comparable dimensions-to-samples"
+regime, and lets Mahalanobis run on the full feature set for a fair comparison.
