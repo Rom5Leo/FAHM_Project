@@ -256,3 +256,179 @@ def leave_one_failure_out(X, feats, fw, make_model, prefail_hours=48):
             "n_test_pos": int(yte.sum()),
         })
     return pd.DataFrame(rows)
+
+def threshold_sweep(score, feats, fw, splits, quantiles=(0.90, 0.95, 0.99, 0.995, 0.999)):
+    """How lead time and false-alarm rate trade off as the alarm threshold moves."""
+    val = splits["val_healthy"]
+    ts = feats["window_start"]
+    rows = []
+    for q in quantiles:
+        thr = np.quantile(score[val], q)
+        fa_day = (score[val] > thr).mean() * 24
+        for _, f in fw.iterrows():
+            pre = (ts >= f["start"] - pd.Timedelta(hours=48)) & (ts < f["start"])
+            fired = ts[pre][score[pre] > thr]
+            lead = round((f["start"] - fired.min()).total_seconds()/3600, 1) if len(fired) else 0.0
+            rows.append({"quantile": q, "fa_per_day": round(fa_day, 2),
+                         "failure": f["failure_id"], "lead_h": lead})
+    return pd.DataFrame(rows)
+
+def xgb_permutation_importance(X, feats, fw, prefail_hours=48, n_repeats=10):
+    """Permutation importance of XGBoost (all failures vs healthy)."""
+    import numpy as np, pandas as pd
+    from xgboost import XGBClassifier
+    from sklearn.metrics import average_precision_score
+
+    Xn = X.select_dtypes(include=[np.number]).reset_index(drop=True)
+    ts = feats["window_start"].reset_index(drop=True)
+
+    y = np.zeros(len(Xn), dtype=int)
+    for _, f in fw.iterrows():
+        m = ((ts >= f["start"] - pd.Timedelta(hours=prefail_hours)) & (ts <= f["end"])).values
+        y[m] = 1
+
+    label = feats["label"].reset_index(drop=True).to_numpy()
+    use = (label == "healthy") | (y == 1)
+
+    Xu = np.ascontiguousarray(Xn[use].to_numpy(dtype=float))
+    yu = np.asarray(y[use]).ravel().astype(int)          # force 1D
+    assert yu.ndim == 1, yu.shape
+    print("shapes — Xu:", Xu.shape, "yu:", yu.shape)
+
+    xgb = XGBClassifier(scale_pos_weight=20, eval_metric="logloss",
+                        random_state=1, n_estimators=200)
+    xgb.fit(Xu, yu)
+
+    rng = np.random.RandomState(1)
+    base = average_precision_score(yu, xgb.predict_proba(Xu)[:, 1])
+
+    importances = np.zeros(Xu.shape[1])
+    for j in range(Xu.shape[1]):
+        drops = np.empty(n_repeats)
+        for r in range(n_repeats):
+            Xp = Xu.copy()
+            Xp[:, j] = rng.permutation(Xp[:, j])
+            drops[r] = base - average_precision_score(yu, xgb.predict_proba(Xp)[:, 1])
+        importances[j] = drops.mean()
+
+    return pd.Series(importances, index=Xn.columns).sort_values(ascending=False)
+
+def plot_importance(imp, title="Feature importance", top=None, color="#4C72B0"):
+    """Horizontal bar chart of an importance Series (largest at top). Returns fig."""
+    import matplotlib.pyplot as plt
+    s = imp.head(top) if top else imp
+    s = s.iloc[::-1]                       # reverse so largest plots at top
+    fig, ax = plt.subplots(figsize=(9, max(4, 0.35 * len(s))))
+    ax.barh(s.index, s.values, color=color)
+    ax.set_xlabel("importance (mean AP drop when shuffled)")
+    ax.set_title(title)
+    ax.axvline(0, color="grey", lw=0.6)    # negatives = feature hurt the model
+    fig.tight_layout()
+    return fig
+
+# importance on PREFAIL-only (drop infail) — the honestly predictive signal
+def xgb_importance_prefail_only(X, feats, fw, prefail_hours=48, n_repeats=10):
+    import numpy as np, pandas as pd
+    from xgboost import XGBClassifier
+    from sklearn.metrics import average_precision_score
+
+    Xn = X.select_dtypes(include=[np.number]).reset_index(drop=True)
+    ts = feats["window_start"].reset_index(drop=True)
+
+    y = np.zeros(len(Xn), dtype=int)
+    for _, f in fw.iterrows():
+        m = ((ts >= f["start"] - pd.Timedelta(hours=prefail_hours)) & (ts < f["start"])).values  # prefail ONLY
+        y[m] = 1
+
+    label = feats["label"].reset_index(drop=True).to_numpy()
+    use = (label == "healthy") | (y == 1)
+
+    Xu = np.ascontiguousarray(Xn[use].to_numpy(dtype=float))
+    yu = np.asarray(y[use]).ravel().astype(int)          # force 1D
+    assert yu.ndim == 1, yu.shape
+    print("shapes — Xu:", Xu.shape, "yu:", yu.shape)
+
+    xgb = XGBClassifier(scale_pos_weight=40, eval_metric="logloss",
+                        random_state=1, n_estimators=200)
+    xgb.fit(Xu, yu)
+
+    rng = np.random.RandomState(1)
+    base = average_precision_score(yu, xgb.predict_proba(Xu)[:, 1])
+
+    importances = np.zeros(Xu.shape[1])
+    for j in range(Xu.shape[1]):
+        drops = np.empty(n_repeats)
+        for r in range(n_repeats):
+            Xp = Xu.copy()
+            Xp[:, j] = rng.permutation(Xp[:, j])
+            drops[r] = base - average_precision_score(yu, xgb.predict_proba(Xp)[:, 1])
+        importances[j] = drops.mean()
+
+    return pd.Series(importances, index=Xn.columns).sort_values(ascending=False)
+
+def forecast_residual_score(feats, X, splits, signal="oil_median", n_lags=6):
+    """Forecast-residual anomaly score (D23). Train a lag model on HEALTHY
+    windows to predict `signal` from its previous n_lags values; the score is
+    the absolute residual (|actual - predicted|). Large residual = the signal
+    stopped following its own recent pattern = anomalous.
+
+    Respects time order (lags are past-only) and segments (no lag across a gap).
+    """
+    from sklearn.linear_model import Ridge
+
+    s = X[signal].reset_index(drop=True)
+    seg = feats["segment_id"].reset_index(drop=True)
+
+    # build lag matrix: row t = [s[t-1], ..., s[t-n_lags]] -> predict s[t]
+    # only where all lags are in the SAME segment (no forecasting across a gap)
+    rows, targets, idx = [], [], []
+    for t in range(n_lags, len(s)):
+        if seg[t] == seg[t - n_lags]:                 # same segment across the window
+            rows.append(s[t - n_lags:t].values[::-1]) # most-recent-first
+            targets.append(s[t])
+            idx.append(t)
+    Xlag = np.array(rows); ylag = np.array(targets); idx = np.array(idx)
+
+    # train on healthy rows only
+    healthy = (feats["label"].reset_index(drop=True).values == "healthy")[idx]
+    model = Ridge().fit(Xlag[healthy], ylag[healthy])
+
+    pred = model.predict(Xlag)
+    resid = np.abs(ylag - pred)
+
+    # map back to full-length score (NaN where no lag available -> fill 0 = "not scored")
+    score = pd.Series(0.0, index=feats.index)
+    score.iloc[idx] = resid
+    return score.rename(f"fcast_resid_{signal}")
+
+def healthy_anchored_residual(feats, X, splits, signals=("oil_median", "tp3_decay_slope"),
+                              multi=True):
+    """Healthy-anchored forecast-residual (D23, corrected).
+    For each target signal, train a model on HEALTHY windows to predict it from
+    the OTHER features, then score |actual - healthy_predicted| across all
+    windows. Unlike lag-forecasting, this never adapts to the degrading machine
+    — it holds the healthy expectation and measures departure from it.
+
+    multi=True: combine per-signal residuals into one score (max of the
+    healthy-scaled residuals), so it's comparable to zmax's multivariate score.
+    """
+    from sklearn.ensemble import GradientBoostingRegressor
+
+    h = (feats["label"] == "healthy").values
+    resids = {}
+    for sig in signals:
+        predictors = [c for c in X.columns if c != sig]
+        Xp = X[predictors].to_numpy()
+        y = X[sig].to_numpy()
+
+        model = GradientBoostingRegressor(random_state=1).fit(Xp[h], y[h])
+        pred = model.predict(Xp)
+        r = np.abs(y - pred)
+        # scale each residual by its healthy spread so signals are comparable
+        r = r / (r[h].std() or 1)
+        resids[sig] = r
+
+    R = pd.DataFrame(resids, index=feats.index)
+    if multi:
+        return R.max(axis=1).rename("healthy_anchored_resid")   # max = "most departed signal"
+    return R

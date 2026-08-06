@@ -317,3 +317,27 @@ def save_features(feats: pd.DataFrame, cfg: dict) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     feats.to_parquet(out, index=False)
     return out
+
+def cycle_features_multiscale(df, grid, lookback="6h"):
+    """Cycle variability computed over a trailing look-back (D27), not the
+    window's own hour — more cycles per computation → less NaN. Window identity
+    stays 1h; only the look-back for THESE features is extended. Respects
+    segments (no look-back across a gap)."""
+    lb = pd.Timedelta(lookback)
+    rows = []
+    for _, w in grid.iterrows():
+        seg_id = w["segment_id"]
+        lo = w["window_end"] - lb
+        # samples in [window_end - lookback, window_end], same segment only
+        m = ((df[TIMESTAMP] > lo) & (df[TIMESTAMP] <= w["window_end"]))
+        # restrict to same segment: reuse the segment boundary via time (gap-aware)
+        seg = df[m]
+        starts = seg.loc[seg["DV_eletric"].diff() == 1, TIMESTAMP]
+        cycle_secs = starts.diff().dt.total_seconds().dropna()
+        if len(cycle_secs) >= 3:
+            cv = cycle_secs.std() / cycle_secs.mean()
+            trend = np.polyfit(range(len(cycle_secs)), cycle_secs, 1)[0]
+        else:
+            cv, trend = np.nan, np.nan
+        rows.append({"cycle_dur_cv_6h": cv, "cycle_dur_trend_6h": trend})
+    return pd.DataFrame(rows, index=grid.index)

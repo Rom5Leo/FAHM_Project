@@ -317,6 +317,11 @@
   compute cycle features over a longer look-back (e.g. 6h preceding each 1h
   window) to raise coverage without losing rows. Not yet implemented; noted as
   the principled fix for cycle-feature sparsity.
+- (executed) — Multi-scale cycle features resolve the sparsity tradeoff: 
+  6h look-back for cycle features: NaN 78%→6%. Removes the imputation-noise
+  drag §7.2 measured (F1/F2/F4/degraded recover) while keeping F3 (0.689 vs
+  0.676 if dropped). Net improvement across targets. Trend feature needs
+  winsorizing (heavy tails from sparse-cycle polyfits).
 
 ## D28 — Spectral (cycle_frequency) family: analyzed, excluded from model set
 - Lomb-Scargle dominant_freq + spectral_entropy corroborate F4 (faster, more
@@ -349,6 +354,10 @@
   The multivariate methods hunt subtle joint patterns that aren't the signal
   here. Verified zmax is genuinely multivariate: the argmax feature varies by
   failure (F4 trips tp3_decay_slope, others differ), not one dominant feature.
+- Multivariate methods lose because failures present as few-extreme-features,
+  which max|z| catches directly, not as subtle whole-covariance shifts.
+- Full metric scorecard adopted (ROC-AUC, PR-AUC, precision/recall at 1% FA,
+  lead time) — accuracy omitted as meaningless at this imbalance.
 
 ## D31 — Two detectors are complementary: anomaly (unique failures) + supervised (shared-pattern failures)
 - Leave-one-failure-out (train on 3 failures, test on held-out 4th): F3
@@ -356,12 +365,36 @@
 - Inverts anomaly-detection difficulty: F4 is easiest-as-anomaly (unique ->
   deviates most from healthy) but hardest-to-learn-from-others (unique -> unseen
   pattern); F3 is hardest-as-anomaly but easiest-to-transfer (shared pattern).
-- No supervised model beats zmax as a detector (handicapped on unique failures).
-  zmax stays primary; supervised reveals failure TAXONOMY, not better detection.
+- No supervised model beats zmax as a detector. Conclusion: anomaly detection
+  catches unique failures, supervised catches shared-pattern ones — a mature
+  system uses both.
 - Consequence: a deployed system benefits from both — anomaly scoring for novel
   failures, supervised for recurring known-pattern failures.
 
+## D32 — Importance must exclude infail windows (predictive vs descriptive signal)
+- prefail+infail target inflated oil importance via the trivially-extreme
+  during-failure state. prefail-ONLY importance: oil_std/oil_median stay top but
+  reduced, tp3_decay_slope RISES to #3 — the true precursor surfaces once
+  descriptive leakage is removed.
+- Physical reading: both top features detect the SAME air leak — decay slope
+  directly (idle air-pressure fall), oil indirectly (compressor overwork → heat).
+  Consistent with F4's oil being workload-driven (oil_residual ~0, stage 3).
+- oil_residual ranks low: trees learn the duty-correction from raw features, so
+  the pre-computed residual is redundant to XGBoost (valuable for interpretation,
+  not for tree models).
 
+## D33 — Forecast-residual converges to zmax (failures are level not trajectory)
+- Two variants tested: lag-forecaster (predicts window from its own recent past)
+  adapts to the degradation — a smooth ramp is predictable from recent values,
+  so residual stays small; near-random. Healthy-anchored variant (predict signal
+  from other features via healthy-trained GBM) reduces to zmax on 2 signals —
+  matches zmax only on F4 (where those signals carry the failure), loses
+  elsewhere (zmax watches all 23 features).
+- Both confirm failures are LEVEL-departures (which zmax measures over all
+  features), not trajectory anomalies. Healthy has no temporal structure (D22)
+  for forecasting to exploit. LSTM/GBM not pursued — a better forecaster
+  predicts smooth ramps better, shrinking the residual, worsening detection.
+  
 ---
 
 # Open Questions
@@ -611,20 +644,16 @@
   predicted. Assign features to failures by measurement, not expectation.
 
 ### L17 — Always run the trivial baseline; it may win
-- A 3-line max|z| detector beat IsolationForest and Mahalanobis on every
-  failure. Reaching straight for the sophisticated model would have produced a
-  worse, less interpretable result. The baseline wins when features already
-  encode the signal well — check before adding complexity.
+- A 3-line max|z| detector beat IsolationForest, Mahalanobis, all seven
+  supervised models, and two forecast-residual variants. Reaching for
+  sophistication first would have produced a worse, less interpretable result.
+- The baseline wins when the features already encode the signal — check before
+  adding complexity.
 
-### L18 — Mahalanobis with shrinkage covariance
-
-The raw sample covariance is singular here (condition number ~1e21): the
-occupancy fractions sum to 1, the one-hot regime dummies sum to 1, and the
-_missing flags correlate with their features — structural collinearity that no
-single column-drop cures. `pinv` doesn't error on a singular matrix, it returns
-garbage, which inverted the score (healthy ranked above failures).
-
-Fix: Ledoit-Wolf shrinkage — analytically shrinks the covariance toward a
-well-conditioned target, giving an invertible estimate that keeps all features.
-This is the correct tool for the "collinear / comparable dimensions-to-samples"
-regime, and lets Mahalanobis run on the full feature set for a fair comparison.
+### L18 — A singular covariance silently inverts a distance metric
+- Mahalanobis scored healthy above failures because structural collinearity
+  (occupancy fractions, one-hots, _missing flags) made the covariance singular
+  (cond ~1e21); pinv returned garbage. Ledoit-Wolf shrinkage fixed the
+  conditioning (cond ~660) and un-inverted it. Verify a distance metric's
+  covariance is well-conditioned before trusting — and don't judge a method on a
+  numerically broken run.
