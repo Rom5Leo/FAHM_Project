@@ -4,7 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 
-data/processed
+data/processed/
 models/
 *.parquet
 *.csv
@@ -13,7 +13,9 @@ models/
 
 .vscode/
 .idea/
-/notebooks/old
-/docs/Lectures
-/docs/references
-/FAHM_guided/
+notebooks/old/
+docs/Lectures/
+docs/references/
+FAHM_guided/
+docs/starting_session_workflow.md
+docs/workflow_mapping.md
