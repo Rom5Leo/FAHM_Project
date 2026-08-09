@@ -7,6 +7,8 @@ paths:
   failure_windows: data/processed/failure_windows.csv
   figures: docs/figures/
   features: data/processed/features.parquet   # D11 convention
+  scores: data/processed/scores.parquet
+  evaluation: docs/evaluation.csv
 
 preprocessing:
   expected_interval_seconds: 10   # modal interval, measured: 1,337,521 of ~1.5M steps (step 2)
@@ -45,4 +47,6 @@ features:
     off_max: 1.0          # < 1 A = motor off
     offloaded_max: 4.75   # 1-4.75 A = offloaded running (~3.9 mode) > 4.75 A = loaded (~5.5-6 mode)
 
-
+labels:                                    # the stage-3 findings, now config
+  degraded_periods: [["2020-04-18", "2020-04-30"]]
+  invalid_periods: [["2020-04-20 04:45", "2020-04-21 01:30"]]

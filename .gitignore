@@ -5,7 +5,6 @@ __pycache__/
 .env
 
 data/processed
-notebooks/old
 models/
 *.parquet
 *.csv
@@ -14,5 +13,6 @@ models/
 
 .vscode/
 .idea/
+notebooks/old
+docs/
 /FAHM_guided/
-docs/autoviz_report.pdf
