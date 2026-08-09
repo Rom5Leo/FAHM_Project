@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 
-BOOKKEEPING = ["window_start", "window_end", "segment_id", "n_samples", "label"]
+BOOKKEEPING = ["window_start", "window_end", "segment_id", "label"]
 
 
 # ---------------------------------------------------------------------------
@@ -29,8 +29,9 @@ BOOKKEEPING = ["window_start", "window_end", "segment_id", "n_samples", "label"]
 def make_matrix(feats: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split into numeric model matrix X and bookkeeping meta.
     Booleans -> 0/1; cycling_regime -> one-hot; label/bounds kept in meta."""
-    meta = feats[BOOKKEEPING].copy()
-    X = feats.drop(columns=BOOKKEEPING).copy()
+    bk = [c for c in BOOKKEEPING if c in feats.columns]
+    meta = feats[bk].copy()
+    X = feats.drop(columns=bk).copy()
 
     # booleans -> int (motor_frozen, tp3_frozen, the _missing flags if bool)
     bool_cols = X.select_dtypes(include="bool").columns

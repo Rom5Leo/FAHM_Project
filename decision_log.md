@@ -394,6 +394,13 @@
   features), not trajectory anomalies. Healthy has no temporal structure (D22)
   for forecasting to exploit. LSTM/GBM not pursued — a better forecaster
   predicts smooth ramps better, shrinking the residual, worsening detection.
+
+## D34 - Fixing mismatch between the notebook's feature table and the pipeline's feature table
+- End-to-end pipeline run surfaced a notebook/module drift — 
+the notebook feature table carried n_samples, the module build didn't
+- make_matrix now tolerates missing bookkeeping columns. 
+- Lesson: running headless from raw catches inconsistencies that
+  cell-by-cell notebook execution hides.
   
 ---
 
@@ -657,3 +664,22 @@
   conditioning (cond ~660) and un-inverted it. Verify a distance metric's
   covariance is well-conditioned before trusting — and don't judge a method on a
   numerically broken run.
+
+### L19 — Headless end-to-end runs catch drift that cell-by-cell hides
+- The full pipeline surfaced a notebook/module divergence: the notebook feature
+  table carried n_samples, the module build didn't; make_matrix crashed. Fixed
+  by tolerating absent bookkeeping columns. A notebook run cell-by-cell never
+  hit this because it used a stale in-memory table. Running from raw, headless,
+  is the test that proves reproducibility.
+
+---
+
+## Gaps in the ML Pipeline -> more that just a notebook work
+
+### GAP1 (closed) — config-driven pipeline runner
+- run_pipeline.py: raw CSV -> preprocess -> features -> score -> evaluate,
+  one command, config-driven, headless, logged, resumable per-stage. Reproduces
+  the notebook results exactly (F1 0.864, F3 0.702, F4 0.795) — verifying the
+  src/ modules are the single source of truth.
+- Artifacts: sensor_readings.parquet, features.parquet, scores.parquet (with
+  zmax/alert/driver for deployment), evaluation.csv.
