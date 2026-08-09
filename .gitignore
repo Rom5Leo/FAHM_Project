@@ -14,5 +14,6 @@ models/
 .vscode/
 .idea/
 notebooks/old
-docs/
+docs/Lectures
+docs/references
 /FAHM_guided/
