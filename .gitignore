@@ -13,7 +13,7 @@ models/
 
 .vscode/
 .idea/
-notebooks/old
-docs/Lectures
-docs/references
+/notebooks/old
+/docs/Lectures
+/docs/references
 /FAHM_guided/
