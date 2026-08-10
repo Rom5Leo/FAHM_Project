@@ -22,8 +22,8 @@ Mahalanobis, seven supervised classifiers, forecast-residual).
 |---|---|---|---|
 | F1 (idle-then-step leak) | 0.86 | 32.5 h | strong |
 | F4 (gradual leak) | 0.80 | 8 h | good |
-| F3 (erratic cycling) | 0.70 | 9.6 h | rescued by cycle-dynamics features + cross-failure learning |
-| F2 (sudden) | 0.64 | — | weak thermal signal, no reliable early warning |
+| F3 (erratic cycling) | 0.70 | 9.6 h | hardest case — rescued by cycle-dynamics features + cross-failure learning |
+| F2 (short leak) | 0.64 | — | mild thermal precursor, too weak for reliable early warning |
 | slow degradation | 0.58 | — | weak (watch as a trend) |
 
 These are **credible predictive-maintenance numbers** — real early warning with a
@@ -98,12 +98,7 @@ pressure-decay slope (the direct leak meter), an oil residual against a healthy
 oil-vs-workload baseline (separating "hot because busy" from "hot because
 failing"), and multi-scale cycle features. Informative missingness handled
 explicitly (indicator + fill), features scaled against healthy operation so
-anomalies read as large deviations. F3 was invisible to every level, rate, 
-and thermal feature and looked undetectable through stage 3 — 
-it was rescued only by **cycle-dynamics features** (the erratic-cycling signature) 
-and confirmed by the **leave-one-failure-out** finding that F3's pattern 
-is learnable from the other failures. 
-The hardest failure to detect, recovered by the right features.
+anomalies read as large deviations. 
 
 **5 — Modeling.** Three paradigms compared under one honest protocol:
 anomaly detection (zmax wins), supervised leave-one-failure-out (reveals a
@@ -111,6 +106,12 @@ anomaly detection (zmax wins), supervised leave-one-failure-out (reveals a
 and forecast-residual (confirms the failures are level, not trajectory,
 anomalies). Full scorecard: ROC-AUC, PR-AUC, precision/recall, lead time,
 false-alarm rate. Threshold presented as a tunable operating-point menu.
+
+**Note: F3 was the project's hardest case.** 
+Invisible to every level, rate, and even spectral (Lomb-Scargle) feature, 
+it looked genuinely undetectable. It was rescued by **cycle-dynamics features** 
+(its short-cycling signature) and confirmed by the **leave-one-failure-out** 
+result that F3's pattern — unlike F4's — is learnable from the other failures.
 
 ---
 
@@ -162,10 +163,9 @@ error caught by physical reasoning.
 
 ## Honest limitations
 
-- **F2 is only weakly detectable** — it shows a mild thermal precursor (oil
-  warming) in the analysis, but the signal is too weak to produce reliable early
-  warning without flooding false alarms (lead time appears only at unusable
-  alarm rates). Detectable in principle, not deployable-early in practice.
+- **F2 detects but doesn't warn early** — a mild thermal precursor (oil residual
+  +0.64) gives moderate separability but no reliable lead time; it fires only at
+  unusable alarm rates.
 - **Slow degradation is weak** (0.58) — better read as a trend than a binary alarm.
 - **Low recall** at the conservative threshold — the system favors trustworthy
   early warning over exhaustive flagging (one early true positive suffices to warn).
