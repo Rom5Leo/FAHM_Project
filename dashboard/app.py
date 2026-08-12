@@ -134,11 +134,49 @@ def monitor():
     elif stat == "untrusted":
         st.warning("Sensor fault \u2014 reading not trusted this window.")
 
-    # timeline
+    # timeline with clickable alarm markers
     lo = max(0, idx - 24 * 14)
     view = scores.iloc[lo: idx + 1]
-    fig = plots.health_timeline(view, now, stat, t_watch, t_alert, fw)
-    st.plotly_chart(fig, use_container_width=True, key=f"tl_{idx}")
+    events = status.alarm_events(scores, t_watch, t_alert, persist_k, up_to_idx=idx)
+
+    @st.dialog("Alarm detail")
+    def _alarm_dialog(ev):
+        color = status.STATUS_COLORS[ev["level"]]
+        st.markdown(
+            f"<div style='background:{color};color:white;padding:10px;"
+            f"border-radius:8px;text-align:center;font-size:20px;font-weight:bold'>"
+            f"{ev['level'].upper()}</div>", unsafe_allow_html=True)
+        st.write(f"**Raised:** {ev['window_start']:%Y-%m-%d %H:%M}")
+        st.write(f"**Health score:** {ev['zmax']:.2f}")
+        st.write(f"**Driver:** `{ev['driver']}` \u2192 "
+                 f"{status.suspected_fault(ev['driver'])}")
+        if sensors is not None:
+            st.markdown("**Sensor readings at alarm:**")
+            srow = sensors.iloc[ev["idx"]]
+            dcols = st.columns(2)
+            for k, (col, label, unit) in enumerate(data.SENSOR_DISPLAY):
+                if col in sensors.columns:
+                    dcols[k % 2].metric(label, f"{srow[col]:.2f} {unit}")
+        if st.button("Go to this moment in replay", use_container_width=True):
+            st.session_state["win_idx"] = ev["idx"]
+            st.session_state["play"] = False
+            st.rerun()
+
+    fig = plots.health_timeline(view, now, stat, t_watch, t_alert, fw, alarms=events)
+    sel = st.plotly_chart(fig, use_container_width=True, key=f"tl_{idx}",
+                          on_select="rerun", selection_mode="points")
+
+    # if an alarm marker was clicked, open its popup
+    pts = (sel.get("selection", {}) or {}).get("points", []) if sel else []
+    for p in pts:
+        clicked_idx = p.get("customdata")
+        if clicked_idx is not None:
+            ev = next((e for e in events if e["idx"] == clicked_idx), None)
+            if ev:
+                _alarm_dialog(ev)
+                break
+
+    st.caption("\u25bc Click an alarm marker on the timeline for its details.")
 
     # two panels: real sensor readings (left) vs detector drivers (right)
     left, right = st.columns(2)

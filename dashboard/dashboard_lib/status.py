@@ -53,3 +53,36 @@ def window_status(scores: pd.DataFrame, i: int,
 def suspected_fault(driver: str) -> str:
     """Human-readable fault hypothesis for a driver feature name."""
     return SUSPECTED_FAULT.get(driver, "abnormal behavior")
+
+
+def alarm_events(scores, t_watch: float, t_alert: float, persist_k: int,
+                 up_to_idx: int | None = None):
+    """Extract ALARM EVENTS — moments the status transitions INTO a non-healthy
+    level (watch / alert / critical). A sustained alert is one event (its onset),
+    not one per window. Returns a list of dicts newest-first:
+        {idx, window_start, level, zmax, driver}
+    If up_to_idx is given, only events at-or-before that replay position (a live
+    monitor only knows the past).
+
+    'Rising into a worse state' is what a person watches: healthy->watch,
+    watch->alert, healthy->alert, ->critical. Staying at the same level or
+    recovering is not a new event.
+    """
+    import pandas as pd  # local; keep module import-light
+
+    n = len(scores) if up_to_idx is None else up_to_idx + 1
+    rank = {"healthy": 0, "watch": 1, "alert": 2, "critical": 3, "untrusted": 0}
+    events, prev = [], "healthy"
+    for i in range(n):
+        s = window_status(scores, i, t_watch, t_alert, persist_k)
+        if rank[s] > rank[prev] and s in ("watch", "alert", "critical"):
+            row = scores.iloc[i]
+            events.append({
+                "idx": i,
+                "window_start": row["window_start"],
+                "level": s,
+                "zmax": float(row["zmax"]),
+                "driver": row.get("driver", "?"),
+            })
+        prev = s
+    return events[::-1]  # newest first

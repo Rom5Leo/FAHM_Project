@@ -87,8 +87,15 @@ def build_sensor_lookup(scores: pd.DataFrame,
     return merged[cols]
 
 
-def recent_alerts(scores: pd.DataFrame, t_alert: float, n: int = 10) -> pd.DataFrame:
+def recent_alerts(scores: pd.DataFrame, t_alert: float, up_to_idx: int | None = None,
+                  n: int = 8) -> pd.DataFrame:
     """The most recent windows over the alert threshold, newest first — feeds
-    the 'jump to recent alarms' panel (Step D)."""
-    hits = scores[scores["zmax"] >= t_alert].copy()
+    the 'jump to recent alarms' panel.
+
+    If up_to_idx is given, only alerts at-or-before that replay position are
+    shown (a live monitor only knows the past). Returns the alert rows plus
+    their original scores-row index in an 'idx' column (for jump buttons)."""
+    df = scores if up_to_idx is None else scores.iloc[: up_to_idx + 1]
+    hits = df[df["zmax"] >= t_alert].copy()
+    hits["idx"] = hits.index
     return hits.sort_values("window_start", ascending=False).head(n)
