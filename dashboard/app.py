@@ -113,19 +113,34 @@ def monitor():
     idx = st.session_state["win_idx"]
     now = scores.iloc[idx]
     stat = status.window_status(scores, idx, t_watch, t_alert, persist_k)
+    scolor = status.STATUS_COLORS[stat]
 
-    # status badge + metrics
-    b1, b2, b3 = st.columns([2, 1, 1])
-    with b1:
+    # ---- header: gauge + status badge + KPI tiles (industrial monitor row) ----
+    gcol, scol, kcol = st.columns([1.1, 1.3, 2])
+    with gcol:
+        st.plotly_chart(plots.health_gauge(now["zmax"], t_watch, t_alert, scolor),
+                        use_container_width=True, key=f"g_{idx}")
+    with scol:
         st.markdown(
-            f"<div style='background:{status.STATUS_COLORS[stat]};color:white;"
-            f"padding:14px;border-radius:10px;text-align:center;'>"
-            f"<span style='font-size:26px;font-weight:bold;'>{stat.upper()}"
-            f"</span></div>", unsafe_allow_html=True)
-    with b2:
-        st.metric("Health score", f"{now['zmax']:.2f}")
-    with b3:
-        st.metric("Alert @", f"{t_alert:.1f}")
+            f"<div style='background:{scolor};color:white;padding:22px 10px;"
+            f"border-radius:12px;text-align:center;margin-top:26px;'>"
+            f"<span style='font-size:30px;font-weight:800;letter-spacing:1px;'>"
+            f"{stat.upper()}</span><br>"
+            f"<span style='font-size:13px;opacity:.85;'>"
+            f"{now['window_start']:%Y-%m-%d %H:%M}</span></div>",
+            unsafe_allow_html=True)
+    with kcol:
+        # KPI tiles: score, active alarms so far, false-alarm rate, windows seen
+        events_so_far = status.alarm_events(scores, t_watch, t_alert, persist_k,
+                                            up_to_idx=idx)
+        n_alerts = sum(1 for e in events_so_far if e["level"] in ("alert", "critical"))
+        k1, k2 = st.columns(2)
+        k1.metric("Health score", f"{now['zmax']:.2f}", f"thr {t_alert:.1f}")
+        k2.metric("Alarms raised", str(len(events_so_far)),
+                  f"{n_alerts} alert+")
+        k3, k4 = st.columns(2)
+        k3.metric("Window", f"{idx+1}/{len(scores)}")
+        k4.metric("Status", stat.upper())
 
     if stat in ("alert", "critical"):
         drv = now.get("driver", "?")
