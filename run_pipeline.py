@@ -78,19 +78,29 @@ def stage_score(cfg: dict, threshold_q: float = 0.99) -> None:
                         if c in X.columns])
 
     splits = mdl.time_split(feats)
-    score = mdl.zmax_score(X, splits)
+
+    # D34: features arrive UNSCALED; fit scaler on train-healthy only (no leak),
+    # then score with pure zmax over the continuous columns only.
+    mu, sd, cont = mdl.fit_healthy_scaler(X, splits)
+    X = mdl.apply_scaler(X, mu, sd, cont)
+    score = mdl.zmax_score(X, splits, cont_cols=cont)
     thr = float(np.quantile(score[splits["val_healthy"]], threshold_q))
 
-    num = X.select_dtypes(include=[np.number])
     out = meta[["window_start", "window_end", "label"]].copy()
     out["zmax"] = score
     out["alert"] = score > thr
-    out["driver"] = num.abs().idxmax(axis=1)     # the feature that tripped it
+    out["driver"] = X[cont].abs().idxmax(axis=1)         # driver among z-scored cont cols
+    # data-quality gate (trust axis, separate from health) -> dashboard "untrusted"
+    # only GENUINE sensor faults -> untrusted; NOT the benign cycle-missing (idle machine)
+    quality_cols = [c for c in X.columns if c.endswith("_frozen")]
+    out["quality_bad"] = (X[quality_cols] == 1).any(axis=1) if quality_cols else False
+
     path = Path(cfg["paths"].get("scores", "data/processed/scores.parquet"))
     path.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(path, index=False)
-    log.info("score: threshold(q=%.3f)=%.3f | alerts=%s/%s -> %s",
-             threshold_q, thr, int(out["alert"].sum()), len(out), path)
+    log.info("score: threshold(q=%.3f)=%.3f | alerts=%s/%s | quality_flags=%s -> %s",
+             threshold_q, thr, int(out["alert"].sum()), len(out),
+             int(out["quality_bad"].sum()), path)
 
 
 def stage_evaluate(cfg: dict) -> None:
@@ -105,7 +115,10 @@ def stage_evaluate(cfg: dict) -> None:
     X = X.drop(columns=[c for c in ("frac_continuous_load", "frac_loaded")
                         if c in X.columns])
     splits = mdl.time_split(feats)
-    scores = {"zmax": mdl.zmax_score(X, splits)}
+    # D34: scale on train-healthy only, pure zmax over continuous cols
+    mu, sd, cont = mdl.fit_healthy_scaler(X, splits)
+    X = mdl.apply_scaler(X, mu, sd, cont)
+    scores = {"zmax": mdl.zmax_score(X, splits, cont_cols=cont)}
     ev = mdl.evaluate_scores(scores, feats, fw, splits)
     print(ev.to_string(index=False))
     path = Path(cfg["paths"].get("evaluation", "docs/evaluation.csv"))
