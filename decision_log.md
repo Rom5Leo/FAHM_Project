@@ -732,3 +732,14 @@
   notebook numbers are corrected.
 - **Sliding-window deployment path** (10s–5min stride, coverage-based gap
   handling) — responsive real-time scoring vs the hourly evaluation grid.
+
+## FURTHER WORK (flagged)
+- **Real-time sliding-window monitoring + data simulator.** The current dashboard
+  replays historical hourly scores. A true real-time monitor needs (1) a data
+  simulator that streams sensor rows as if the machine were live, and (2) a
+  sliding-window scoring path (trailing-1h features at a 10s–5min stride, with
+  coverage-based gap handling) feeding a rolling scores buffer. The dashboard is
+  already schema-bound and source-agnostic, so it would consume the live stream
+  with only the loader swapped (load_scores -> poll_live_scores). Deferred as one
+  coherent milestone — sliding-window scoring alone, without live data, is only
+  half the feature.

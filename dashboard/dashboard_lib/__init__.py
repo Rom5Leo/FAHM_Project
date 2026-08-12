@@ -1,0 +1,1 @@
+"""FAHM dashboard library — data, status, and plot helpers."""
