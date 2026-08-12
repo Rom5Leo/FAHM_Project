@@ -293,18 +293,6 @@ def prepare_for_model(feats: pd.DataFrame, labels: pd.Series,
         fill = out.loc[labels == "healthy", c].median()     # neutral = healthy median
         out[c] = out[c].fillna(fill)
 
-    # 2) standardize continuous features on HEALTHY only
-    #    (skip: bookkeeping cols, booleans, the *_missing flags, the regime cat)
-    skip = set(exclude) | {c for c in out.columns if c.endswith("_missing")}
-    cont = [c for c in out.columns
-            if c not in skip
-            and out[c].dtype.kind in "fi"
-            and out[c].nunique() > 2]                        # >2 values = continuous
-    h = labels == "healthy"
-    mu = out.loc[h, cont].mean()
-    sd = out.loc[h, cont].std().replace(0, 1.0)             # guard zero-variance
-    out[cont] = (out[cont] - mu) / sd                       # z-score vs healthy
-
     out["label"] = labels.values
     return out
 

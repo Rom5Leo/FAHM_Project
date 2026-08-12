@@ -51,7 +51,7 @@ def make_matrix(feats: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 # ---------------------------------------------------------------------------
-# 2. Time-aware split
+# 2. Time-aware split + fit healthy-scaler
 # ---------------------------------------------------------------------------
 
 def time_split(feats: pd.DataFrame, train_frac: float = 0.6) -> dict:
@@ -76,21 +76,36 @@ def time_split(feats: pd.DataFrame, train_frac: float = 0.6) -> dict:
         "eval_degr": is_degraded,
     }
 
+def fit_healthy_scaler(X, splits, exclude=("window_start", "window_end",
+                                           "segment_id", "n_samples")):
+    """Fit healthy z-score stats on TRAIN-healthy only (no val leakage)."""
+    skip = set(exclude) | {c for c in X.columns if c.endswith("_missing")}
+    cont = [c for c in X.columns
+            if c not in skip and X[c].dtype.kind in "fi" and X[c].nunique() > 2]
+    train = splits["train"]
+    mu = X.loc[train, cont].mean()
+    sd = X.loc[train, cont].std().replace(0, 1.0)
+    return mu, sd, cont
+
+def apply_scaler(X, mu, sd, cont):
+    Xs = X.copy()
+    Xs[cont] = (X[cont] - mu) / sd
+    return Xs
 
 # ---------------------------------------------------------------------------
 # 3. Scorers — same contract: higher score = more anomalous
 # ---------------------------------------------------------------------------
 
-def zmax_score(X: pd.DataFrame, splits: dict) -> pd.Series:
-    """DONE — the 3-line baseline every fancier model must beat.
-
-    Features are already z-scored vs healthy (D29), so the max |z| across
-    features IS an anomaly score. No fitting needed (the 'fit' happened in
-    prepare_for_model's healthy-scaling).
-    """
-    num = X.select_dtypes(include=[np.number])
-    return num.abs().max(axis=1).rename("zmax")
-
+def zmax_score(X, splits, cont_cols=None):
+    """Max |z| across the CONTINUOUS (z-scored) features only.
+    Flags/one-hots/_missing are not z-scores — including them pollutes the
+    max — so score only cont_cols (the columns fit_healthy_scaler scaled).
+    If cont_cols is None, falls back to all numeric (legacy behavior)."""
+    if cont_cols is None:
+        Xn = X.select_dtypes(include=[np.number])
+    else:
+        Xn = X[cont_cols]
+    return Xn.abs().max(axis=1)
 
 def mahalanobis_score(X: pd.DataFrame, splits: dict) -> pd.Series:
     """Mahalanobis distance with Ledoit-Wolf shrinkage covariance.

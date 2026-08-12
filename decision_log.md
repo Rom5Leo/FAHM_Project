@@ -395,12 +395,17 @@
   for forecasting to exploit. LSTM/GBM not pursued — a better forecaster
   predicts smooth ramps better, shrinking the residual, worsening detection.
 
-## D34 - Fixing mismatch between the notebook's feature table and the pipeline's feature table
-- End-to-end pipeline run surfaced a notebook/module drift — 
-the notebook feature table carried n_samples, the module build didn't
-- make_matrix now tolerates missing bookkeeping columns. 
-- Lesson: running headless from raw catches inconsistencies that
-  cell-by-cell notebook execution hides.
+## D34 — Scaler leakage fix (fit on train-healthy only)
+- Bug: prepare_for_model z-scored on ALL healthy windows before the split, so
+  validation-healthy stats leaked into the scaler scoring them. Also n_samples
+  (bookkeeping, max 364) was reaching zmax unscaled and dominating max|z|.
+- Fix: n_samples -> BOOKKEEPING (out of X); scaling deferred to modeling,
+  fit on TRAIN-healthy only (fit_healthy_scaler/apply_scaler), transform all.
+- Honest effect (zmax): F1 0.864->0.768, F3 0.702->0.648, degraded 0.575->0.367
+  (now below chance — slow degradation genuinely not caught, leak had hidden it);
+  F4 0.790 robust. zmax now COMPETITIVE with, not dominant over, IForest
+  (iforest F1 PR-AUC 0.31 vs zmax 0.17). The leaked numbers were inflated; these
+  are the real ones. Report/README numbers must be updated after Fix 2.
   
 ---
 
@@ -674,12 +679,56 @@ the notebook feature table carried n_samples, the module build didn't
 
 ---
 
-## Gaps in the ML Pipeline -> more that just a notebook work
+## Gaps in the ML Pipeline -> more than just notebook work
 
 ### GAP1 (closed) — config-driven pipeline runner
 - run_pipeline.py: raw CSV -> preprocess -> features -> score -> evaluate,
   one command, config-driven, headless, logged, resumable per-stage. Reproduces
-  the notebook results exactly (F1 0.864, F3 0.702, F4 0.795) — verifying the
-  src/ modules are the single source of truth.
+  the notebook results exactly (post-D34 honest numbers: F1 0.77, F3 0.65,
+  F4 0.79) — verifying the src/ modules are the single source of truth.
 - Artifacts: sensor_readings.parquet, features.parquet, scores.parquet (with
   zmax/alert/driver for deployment), evaluation.csv.
+- Note: the pipeline's score stage must carry the D34 fixes (drop n_samples,
+  fit scaler on train-healthy only, zmax over continuous cols only) so its
+  scores.parquet matches the corrected notebook.
+
+### GAP2 (on-going) — real-time monitoring dashboard
+- dashboard/app.py: a Streamlit health-monitor over scores.parquet. One live
+  fragment (run_every) streams the replay smoothly without full-page refresh —
+  advances the window on a throttle (seconds-per-window), transport controls
+  (play/pause/stop/prev/next/seek), and jump-to-failure buttons.
+- Displays: colored status badge (healthy/watch/alert/critical from score bands
+  + a data-quality gate -> "untrusted"), live sensor readouts, the health-score
+  timeline with playhead and failure markers, and two feature panels — raw
+  sensor state vs the top-|z| features driving the detector (the interpretable
+  "why").
+- Health-vs-trust separation: zmax scores health; the frozen/missing flags feed
+  a separate quality_bad gate (the grey "untrusted" status), not the score.
+- Schema-bound, not numbers-bound: consumes any scores.parquet with the standard
+  columns, so corrected scores (D34) drop in unchanged. Optional columns
+  (quality_bad) used if present.
+- Prototype status: a working first version; future work = a true sliding-window
+  streaming path (10s/1-5min stride, coverage-based gap handling) for genuine
+  real-time monitoring rather than historical replay.
+
+---
+
+## Notebook cleanup (post-D34)
+- Removed the relabel_prefail(168h) experiment from 05_modeling: it was
+  exploratory, its conclusion (longer prefail barely moved AUCs — the
+  anomaly-vs-healthy metric is intrinsically blunt) is retained as the
+  motivation for leave-one-failure-out (§5). The cell also errored after the
+  D34 re-run (boolean/label mismatch). Finding preserved in log; cell deleted.
+
+## PARKED — to revisit after notebook correction
+- **Combined-detector evaluation (deployment-honest).** The taxonomy finding
+  (D31) means the deployed system likely runs BOTH detectors (anomaly for unique
+  failures like F4, supervised for shared-pattern like F3). Current evaluation
+  scores them separately — but the honest question is the ENSEMBLE's per-failure
+  detection, combined false-alarm rate, and lead time under a defined fusion rule
+  (OR-gate / score fusion / regime routing). Also: leave-one-failure-out measures
+  learnability but is NOT the shippable model (which trains on all failures);
+  the deployment evaluation needs its own honest design. Revisit after the
+  notebook numbers are corrected.
+- **Sliding-window deployment path** (10s–5min stride, coverage-based gap
+  handling) — responsive real-time scoring vs the hourly evaluation grid.
