@@ -12,7 +12,7 @@ runner → a real-time Streamlit dashboard. The emphasis throughout is **honest
 evaluation** — per-failure detectability with real lead times, not a headline
 accuracy number.
 
-![MetroPT-3 metro-train air production unit](docs/dataset-cover.jpg)
+![MetroPT-3 metro-train air production unit](docs/figures/dataset-cover.jpg)
 
 ---
 
