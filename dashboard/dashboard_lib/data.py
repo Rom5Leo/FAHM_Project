@@ -44,9 +44,9 @@ def load_features(path: Path = FEATURES_PATH):
 def load_failures(path: Path = FAILURES_PATH):
     """Documented failure windows (for jump buttons and timeline markers)."""
     if path.exists():
-        return pd.read_csv(path, parse_dates=["start"])
+        fw = pd.read_csv(path, parse_dates=["start", "end"])
+        return fw
     return None
-
 
 def failure_indices(scores: pd.DataFrame, failures: pd.DataFrame) -> dict:
     """Map each failure_id -> the scores-row index nearest its start time

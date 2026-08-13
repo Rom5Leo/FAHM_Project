@@ -86,3 +86,25 @@ def alarm_events(scores, t_watch: float, t_alert: float, persist_k: int,
             })
         prev = s
     return events[::-1]  # newest first
+
+
+def group_alarms_by_failure(events: list, failures, lead_days: int = 14) -> dict:
+    """Group alarms by the failure they precede. Each alarm belongs to at most
+    ONE failure (the first, in chronological failure order, whose window
+    [start - lead_days, end] contains it)."""
+    import pandas as pd
+
+    groups, remaining = {}, list(events)
+    if failures is not None:
+        for _, f in failures.sort_values("start").iterrows():
+            start = pd.to_datetime(f["start"])
+            end = pd.to_datetime(f["end"]) if pd.notna(f.get("end")) else start
+            lo = start - pd.Timedelta(days=lead_days)
+            grp = [e for e in remaining if lo <= e["window_start"] <= end]
+            if grp:
+                groups[str(f["failure_id"])] = grp
+                claimed = {id(e) for e in grp}
+                remaining = [e for e in remaining if id(e) not in claimed]
+    if remaining:
+        groups["other"] = remaining
+    return groups
