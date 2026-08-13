@@ -406,6 +406,18 @@
   F4 0.790 robust. zmax now COMPETITIVE with, not dominant over, IForest
   (iforest F1 PR-AUC 0.31 vs zmax 0.17). The leaked numbers were inflated; these
   are the real ones. Report/README numbers must be updated after Fix 2.
+
+## D35 — Dashboard: health vs trust, and events not windows
+- Two design decisions crystallized building GAP2, both worth logging:
+  (1) HEALTH and TRUST are orthogonal axes. zmax answers "is the machine
+  failing?"; the frozen-sensor gate answers "can I trust this reading?". Conflating
+  them (the original quality_bad = _frozen | _missing, which flagged ~80% of
+  windows via benign idle-missingness) is wrong — narrowed to _frozen only
+  (~4%, 162 windows), a rare actionable signal. The dashboard shows trust as a
+  distinct grey state, never as a health score.
+  (2) An operator watches EVENTS, not windows. A sustained alert is one alarm
+  (its onset), not 40. alarm_events() records transitions into a worse state;
+  this is what makes the alarm log and timeline markers legible.
   
 ---
 
@@ -692,24 +704,29 @@
   fit scaler on train-healthy only, zmax over continuous cols only) so its
   scores.parquet matches the corrected notebook.
 
-### GAP2 (on-going) — real-time monitoring dashboard
-- dashboard/app.py: a Streamlit health-monitor over scores.parquet. One live
-  fragment (run_every) streams the replay smoothly without full-page refresh —
-  advances the window on a throttle (seconds-per-window), transport controls
-  (play/pause/stop/prev/next/seek), and jump-to-failure buttons.
-- Displays: colored status badge (healthy/watch/alert/critical from score bands
-  + a data-quality gate -> "untrusted"), live sensor readouts, the health-score
-  timeline with playhead and failure markers, and two feature panels — raw
-  sensor state vs the top-|z| features driving the detector (the interpretable
-  "why").
-- Health-vs-trust separation: zmax scores health; the frozen/missing flags feed
-  a separate quality_bad gate (the grey "untrusted" status), not the score.
+### GAP2 (closed) — real-time monitoring dashboard
+- dashboard/app.py + dashboard_lib/ (data / status / plots) — a Streamlit
+  health-monitor over scores.parquet, structured to mirror the src/fahm ↔
+  notebook split (logic in the package, app.py is pure UI orchestration).
+- Live replay via one st.fragment(run_every): throttled auto-advance
+  (seconds-per-window), transport controls (play/pause/stop/prev/next/seek),
+  jump-to-failure buttons, and a live clock.
+- Status logic (status.py): health bands (healthy/watch/alert/critical, with
+  persistence-k escalation) kept SEPARATE from a trust gate — the frozen-sensor
+  quality_bad flag renders "untrusted" (grey), never contaminating the health
+  score. The D34 health-vs-trust separation made into UI state.
+- Alarm model: alarm_events() logs status ESCALATIONS (one event per onset, not
+  per window); rendered as clickable triangle markers ON the timeline. Clicking
+  opens a detail popup (level, time, score, driver→fault, sensor readings at that
+  moment) without moving the replay cursor. Sidebar groups the full alarm history
+  by the failure each alarm precedes (group_alarms_by_failure).
+- Two live panels: real per-window SENSOR READINGS in physical units (oil temp
+  °C, motor current A, pressures bar — last reading per window via merge_asof)
+  and the TOP-|z| DRIVERS bar chart (the interpretable "why").
+- Presentation: dark industrial theme, circular health gauge, KPI tiles, a
+  one-screen fixed-monitor layout evoking a plant SCADA display.
 - Schema-bound, not numbers-bound: consumes any scores.parquet with the standard
-  columns, so corrected scores (D34) drop in unchanged. Optional columns
-  (quality_bad) used if present.
-- Prototype status: a working first version; future work = a true sliding-window
-  streaming path (10s/1-5min stride, coverage-based gap handling) for genuine
-  real-time monitoring rather than historical replay.
+  columns, so the corrected D34 scores dropped in unchanged.
 
 ---
 
